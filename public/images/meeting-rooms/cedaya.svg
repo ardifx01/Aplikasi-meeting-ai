@@ -1,0 +1,45 @@
+<svg width="400" height="300" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="forest" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#047857;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grass" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#84cc16;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#65a30d;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Forest background -->
+  <rect width="400" height="300" fill="url(#forest)" rx="8"/>
+  
+  <!-- Grass ground -->
+  <path d="M0 200 Q100 180 200 200 Q300 220 400 200 L400 300 L0 300 Z" fill="url(#grass)"/>
+  
+  <!-- Table -->
+  <rect x="100" y="180" width="200" height="60" fill="#94a3b8" rx="4"/>
+  <rect x="120" y="200" width="160" height="20" fill="#64748b" rx="2"/>
+  
+  <!-- Chairs -->
+  <circle cx="120" cy="220" r="15" fill="#cbd5e1"/>
+  <circle cx="280" cy="220" r="15" fill="#cbd5e1"/>
+  <circle cx="200" cy="220" r="15" fill="#cbd5e1"/>
+  
+  <!-- Screen/Projector -->
+  <rect x="150" y="80" width="100" height="60" fill="#475569" rx="4"/>
+  <rect x="160" y="90" width="80" height="40" fill="#1e293b" rx="2"/>
+  
+  <!-- Trees -->
+  <circle cx="80" cy="120" r="25" fill="#166534"/>
+  <circle cx="320" cy="100" r="20" fill="#166534"/>
+  <circle cx="350" cy="140" r="18" fill="#166534"/>
+  
+  <!-- Decorative elements -->
+  <circle cx="50" cy="50" r="8" fill="#fbbf24" opacity="0.8"/>
+  <circle cx="350" cy="80" r="6" fill="#fbbf24" opacity="0.6"/>
+  
+  <!-- Text -->
+  <text x="200" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#ffffff">Cedaya</text>
+</svg>
+
+

@@ -1,0 +1,48 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Robot Head -->
+  <circle cx="128" cy="80" r="48" fill="#1e40af" stroke="#1e3a8a" stroke-width="2"/>
+  
+  <!-- Top Accent -->
+  <ellipse cx="128" cy="60" rx="32" ry="8" fill="#93c5fd"/>
+  
+  <!-- Eyes -->
+  <ellipse cx="110" cy="70" rx="8" ry="5" fill="#93c5fd" transform="rotate(12 110 70)"/>
+  <ellipse cx="146" cy="70" rx="8" ry="5" fill="#93c5fd" transform="rotate(-12 146 70)"/>
+  
+  <!-- Mouth -->
+  <ellipse cx="128" cy="100" rx="10" ry="4" fill="#93c5fd"/>
+  
+  <!-- Antennas -->
+  <line x1="104" y1="32" x2="104" y2="20" stroke="#1e40af" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="104" cy="18" r="4" fill="#93c5fd"/>
+  
+  <line x1="152" y1="32" x2="152" y2="20" stroke="#1e40af" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="152" cy="18" r="4" fill="#93c5fd"/>
+  
+  <!-- Robot Body -->
+  <ellipse cx="128" cy="160" rx="36" ry="40" fill="white" stroke="#e5e7eb" stroke-width="2"/>
+  
+  <!-- Center Panel -->
+  <rect x="108" y="140" width="40" height="24" rx="8" fill="#93c5fd"/>
+  
+  <!-- Side Arms -->
+  <ellipse cx="92" cy="160" rx="8" ry="20" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+  <ellipse cx="92" cy="160" rx="6" ry="16" fill="#93c5fd"/>
+  
+  <ellipse cx="164" cy="160" rx="8" ry="20" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+  <ellipse cx="164" cy="160" rx="6" ry="16" fill="#93c5fd"/>
+  
+  <!-- Floating Elements -->
+  <circle cx="100" cy="60" r="4" fill="#93c5fd" opacity="0.8">
+    <animate attributeName="opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  
+  <circle cx="156" cy="200" r="3" fill="#bfdbfe" opacity="0.8">
+    <animate attributeName="opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite" begin="1s"/>
+  </circle>
+  
+  <circle cx="200" cy="140" r="2" fill="#60a5fa" opacity="0.8">
+    <animate attributeName="opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite" begin="0.5s"/>
+  </circle>
+</svg>
+
