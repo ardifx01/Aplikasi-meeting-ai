@@ -7,6 +7,8 @@ export enum Page {
   AiAssistant,
   BookingConfirmation,
   Reservations,
+  ReservationDetail,
+  History,
   Profile,
   Settings,
   HelpCenter,
@@ -37,8 +39,9 @@ export interface QuickAction {
 }
 
 export interface Booking {
-  id: number;
+  id: string | number;
   roomName: string;
+  roomId: number;
   topic: string;
   date: string;
   time: string;

@@ -5,13 +5,7 @@
  */
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    exit(0);
-}
+require_once __DIR__ . '/../_cors.php';
 
 require_once '../../services/authService.php';
 
@@ -36,9 +30,9 @@ try {
         case 'refresh':
             $refresh = $input['refresh_token'] ?? null;
             if (!$refresh) {
-            http_response_code(400);
+                http_response_code(400);
                 echo json_encode(['success' => false, 'message' => 'refresh_token required']);
-            exit;
+                exit;
             }
             $data = $authService->refreshSession($refresh);
             echo json_encode(['success' => (bool)$data, 'data' => $data]);
@@ -47,10 +41,10 @@ try {
         case 'logout':
             $token = $input['session_token'] ?? null;
             if (!$token) {
-            http_response_code(400);
+                http_response_code(400);
                 echo json_encode(['success' => false, 'message' => 'session_token required']);
-            exit;
-        }
+                exit;
+            }
             $ok = $authService->logout($token);
             echo json_encode(['success' => (bool)$ok]);
             break;

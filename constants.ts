@@ -9,7 +9,7 @@ export const MEETING_ROOMS: MeetingRoom[] = [
     capacity: 15,
     address: 'Injourney Airport Center',
     facilities: ['TV', 'AC', 'Proyektor'],
-    image: '/images/meeting-rooms/samudrantha.svg',
+    image: '/images/meeting-rooms/r1.jpeg',
   },
   {
     id: 2,
@@ -18,7 +18,7 @@ export const MEETING_ROOMS: MeetingRoom[] = [
     capacity: 15,
     address: 'Injourney Airport Center',
     facilities: ['TV', 'AC', 'Proyektor'],
-    image: '/images/meeting-rooms/cedaya.svg',
+    image: '/images/meeting-rooms/r2.jpeg',
   },
   {
     id: 3,
@@ -27,7 +27,7 @@ export const MEETING_ROOMS: MeetingRoom[] = [
     capacity: 15,
     address: 'Injourney Airport Center',
     facilities: ['TV', 'AC', 'Proyektor'],
-    image: '/images/meeting-rooms/celebes.svg',
+    image: '/images/meeting-rooms/r3.jpeg',
   },
   {
     id: 4,
@@ -36,7 +36,7 @@ export const MEETING_ROOMS: MeetingRoom[] = [
     capacity: 15,
     address: 'Injourney Airport Center',
     facilities: ['TV', 'AC', 'Proyektor', 'Whiteboard'],
-    image: '/images/meeting-rooms/kalamanthana.svg',
+    image: '/images/meeting-rooms/r4.jpeg',
   },
    {
     id: 5,
@@ -45,7 +45,7 @@ export const MEETING_ROOMS: MeetingRoom[] = [
     capacity: 15,
     address: 'Injourney Airport Center',
     facilities: ['TV', 'AC'],
-    image: '/images/meeting-rooms/nusanipa.svg',
+    image: '/images/meeting-rooms/r5.jpeg',
   },
   {
     id: 6,
@@ -54,7 +54,7 @@ export const MEETING_ROOMS: MeetingRoom[] = [
     capacity: 20,
     address: 'Injourney Airport Center',
     facilities: ['TV', 'AC', 'Proyektor'],
-    image: '/images/meeting-rooms/balidwipa.svg',
+    image: '/images/meeting-rooms/r6.jpeg',
   },
   {
     id: 7,
@@ -63,7 +63,7 @@ export const MEETING_ROOMS: MeetingRoom[] = [
     capacity: 25,
     address: 'Injourney Airport Center',
     facilities: ['TV', 'AC', 'Proyektor'],
-    image: '/images/meeting-rooms/swarnadwipa.svg',
+    image: '/images/meeting-rooms/r7.jpeg',
   },
   {
     id: 8,
@@ -72,15 +72,15 @@ export const MEETING_ROOMS: MeetingRoom[] = [
     capacity: 35,
     address: 'Injourney Airport Center',
     facilities: ['TV', 'AC', 'Proyektor', 'Sound System'],
-    image: '/images/meeting-rooms/jawadwipa1.svg',
+    image: '/images/meeting-rooms/r8.jpeg',
   },
-    {
+  {
     id: 9,
     name: 'Auditorium Jawadwipa 2',
     floor: 'Ground Floor',
     capacity: 35,
     address: 'Injourney Airport Center',
     facilities: ['TV', 'AC', 'Proyektor', 'Sound System'],
-    image: '/images/meeting-rooms/jawadwipa2.svg',
+    image: '/images/meeting-rooms/r9.jpeg',
   },
 ];

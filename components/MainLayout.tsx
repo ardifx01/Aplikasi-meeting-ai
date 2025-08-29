@@ -71,7 +71,10 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogout }) =>
     return (
         <header className="bg-white/80 backdrop-blur-md shadow-md sticky top-4 mx-4 md:mx-8 rounded-xl z-50">
             <div className="container mx-auto px-6 py-3 flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-cyan-500 cursor-pointer" onClick={() => onNavigate(Page.Dashboard)}>Spacio</h1>
+                <button onClick={() => onNavigate(Page.Dashboard)} className="flex items-center cursor-pointer group">
+                    <img src="/images/logoIAC.png" alt="IAC Logo" className="h-10 md:h-12 w-auto mr-3 rounded-sm" />
+                    <span className="text-3xl font-bold text-cyan-500 group-hover:text-cyan-600">Spacio</span>
+                </button>
                 <nav className="hidden md:flex items-center space-x-8">
                     {navItems.map(item => (
                         <button 
@@ -149,7 +152,7 @@ interface MainLayoutProps {
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children, onNavigate, currentPage, onLogout }) => (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-300 via-sky-400 to-blue-500">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-500 via-sky-600 to-blue-700">
         <div className="relative">
             <div className="relative pt-4 z-30">
                 <Header onNavigate={onNavigate} currentPage={currentPage} onLogout={onLogout} />

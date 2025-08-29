@@ -17,7 +17,11 @@ class MeetingRoom {
      */
     public function getAllRooms() {
         try {
-            $query = "SELECT * FROM " . $this->table_name . " WHERE is_active = true ORDER BY name";
+            // Match actual columns in meeting_rooms: room_name, is_available, is_maintenance
+            $query = "SELECT id, room_name AS name, room_number, capacity, floor, building, description, features, image_url, is_available, is_maintenance, created_at, updated_at
+                      FROM " . $this->table_name . "
+                      WHERE is_available = 1
+                      ORDER BY room_name";
             $stmt = $this->conn->prepare($query);
             $stmt->execute();
 
@@ -33,7 +37,8 @@ class MeetingRoom {
      */
     public function getRoomById($id) {
         try {
-            $query = "SELECT * FROM " . $this->table_name . " WHERE id = :id AND is_active = true";
+            $query = "SELECT id, room_name AS name, room_number, capacity, floor, building, description, features, image_url, is_available, is_maintenance, created_at, updated_at
+                      FROM " . $this->table_name . " WHERE id = :id AND is_available = 1";
             $stmt = $this->conn->prepare($query);
             $stmt->bindParam(":id", $id);
             $stmt->execute();
@@ -50,7 +55,8 @@ class MeetingRoom {
      */
     public function getRoomByName($name) {
         try {
-            $query = "SELECT * FROM " . $this->table_name . " WHERE name = :name AND is_active = true";
+            $query = "SELECT id, room_name AS name, room_number, capacity, floor, building, description, features, image_url, is_available, is_maintenance, created_at, updated_at
+                      FROM " . $this->table_name . " WHERE room_name = :name AND is_available = 1";
             $stmt = $this->conn->prepare($query);
             $stmt->bindParam(":name", $name);
             $stmt->execute();

@@ -35,7 +35,17 @@ export class BackendService {
     static async saveConversation(conversationData: ConversationData) {
         try {
             console.log('Saving conversation to backend:', conversationData);
-            const result = await ApiService.saveConversation(conversationData);
+            // Map frontend field ai_response -> response to match PHP endpoint
+            const payload = {
+                user_id: conversationData.user_id,
+                session_id: conversationData.session_id,
+                message: conversationData.message,
+                response: conversationData.ai_response,
+                booking_state: conversationData.booking_state,
+                booking_data: conversationData.booking_data
+            } as any;
+
+            const result = await ApiService.saveConversation(payload);
             console.log('Conversation saved successfully:', result);
             return result;
         } catch (error) {
@@ -45,33 +55,24 @@ export class BackendService {
     }
 
     /**
-     * Create AI booking in backend
+     * Create AI booking in MongoDB (via new endpoint)
      */
     static async createAIBooking(bookingData: BookingData) {
         try {
-            console.log('Creating AI booking in backend:', bookingData);
+            console.log('Creating AI booking in MongoDB:', bookingData);
             
             // Ensure booking_state is set
             if (!bookingData.booking_state) {
                 bookingData.booking_state = 'BOOKED';
             }
 
-            const result = await ApiService.createAIBooking(bookingData);
-            console.log('AI booking created successfully:', result);
-            
-            // Save conversation after successful booking
-            await this.saveConversation({
-                user_id: bookingData.user_id,
-                session_id: bookingData.session_id,
-                message: `AI Agent created booking: ${bookingData.topic}`,
-                ai_response: 'Booking created successfully',
-                booking_state: bookingData.booking_state,
-                booking_data: JSON.stringify(bookingData)
-            });
+            // Use MongoDB endpoint for AI bookings
+            const result = await ApiService.createAIBookingMongo(bookingData);
+            console.log('AI booking created successfully in MongoDB:', result);
 
             return result;
         } catch (error) {
-            console.error('Error creating AI booking:', error);
+            console.error('Error creating AI booking in MongoDB:', error);
             throw error;
         }
     }
@@ -148,7 +149,12 @@ export class BackendService {
     static async checkRoomAvailability(roomId: number, date: string, startTime: string, duration: number) {
         try {
             console.log('Checking room availability:', { roomId, date, startTime, duration });
-            const result = await ApiService.getAvailableRooms(startTime, startTime);
+            // Hit availability endpoint with proper params
+            const endDate = new Date(`1970-01-01T${startTime}:00Z`);
+            const endTime = new Date(endDate.getTime() + duration * 60000)
+              .toISOString()
+              .substring(11, 16);
+            const result = await ApiService.getAvailability(roomId, date, startTime, endTime);
             console.log('Room availability checked successfully:', result);
             return result;
         } catch (error) {

@@ -26,18 +26,18 @@ class Booking {
 
             $stmt = $this->conn->prepare($query);
 
-            // Bind parameters
-            $stmt->bindParam(":user_id", $data['user_id']);
-            $stmt->bindParam(":session_id", $data['session_id']);
-            $stmt->bindParam(":room_id", $data['room_id']);
-            $stmt->bindParam(":topic", $data['topic']);
-            $stmt->bindParam(":meeting_date", $data['meeting_date']);
-            $stmt->bindParam(":meeting_time", $data['meeting_time']);
-            $stmt->bindParam(":duration", $data['duration']);
-            $stmt->bindParam(":participants", $data['participants']);
-            $stmt->bindParam(":meeting_type", $data['meeting_type']);
-            $stmt->bindParam(":food_order", $data['food_order']);
-            $stmt->bindParam(":booking_state", $data['booking_state'] ?? 'BOOKED');
+            // Bind parameters (use bindValue to avoid reference errors with array offsets)
+            $stmt->bindValue(":user_id", $data['user_id']);
+            $stmt->bindValue(":session_id", $data['session_id']);
+            $stmt->bindValue(":room_id", $data['room_id']);
+            $stmt->bindValue(":topic", $data['topic']);
+            $stmt->bindValue(":meeting_date", $data['meeting_date']);
+            $stmt->bindValue(":meeting_time", $data['meeting_time']);
+            $stmt->bindValue(":duration", $data['duration']);
+            $stmt->bindValue(":participants", $data['participants']);
+            $stmt->bindValue(":meeting_type", $data['meeting_type']);
+            $stmt->bindValue(":food_order", $data['food_order']);
+            $stmt->bindValue(":booking_state", isset($data['booking_state']) ? $data['booking_state'] : 'BOOKED');
 
             if ($stmt->execute()) {
                 $bookingId = $this->conn->lastInsertId();
@@ -66,18 +66,18 @@ class Booking {
             // Generate session ID for form-based booking
             $sessionId = 'form_' . time();
 
-            // Bind parameters
-            $stmt->bindParam(":user_id", $data['user_id']);
-            $stmt->bindParam(":session_id", $sessionId);
-            $stmt->bindParam(":room_id", $data['room_id']);
-            $stmt->bindParam(":topic", $data['topic']);
-            $stmt->bindParam(":meeting_date", $data['meeting_date']);
-            $stmt->bindParam(":meeting_time", $data['meeting_time']);
-            $stmt->bindParam(":duration", $data['duration']);
-            $stmt->bindParam(":participants", $data['participants']);
-            $stmt->bindParam(":meeting_type", $data['meeting_type']);
-            $stmt->bindParam(":food_order", $data['food_order']);
-            $stmt->bindParam(":booking_state", $data['booking_state'] ?? 'BOOKED');
+            // Bind parameters (use bindValue for array elements)
+            $stmt->bindValue(":user_id", $data['user_id']);
+            $stmt->bindValue(":session_id", $sessionId);
+            $stmt->bindValue(":room_id", $data['room_id']);
+            $stmt->bindValue(":topic", $data['topic']);
+            $stmt->bindValue(":meeting_date", $data['meeting_date']);
+            $stmt->bindValue(":meeting_time", $data['meeting_time']);
+            $stmt->bindValue(":duration", $data['duration']);
+            $stmt->bindValue(":participants", $data['participants']);
+            $stmt->bindValue(":meeting_type", $data['meeting_type']);
+            $stmt->bindValue(":food_order", $data['food_order']);
+            $stmt->bindValue(":booking_state", isset($data['booking_state']) ? $data['booking_state'] : 'BOOKED');
 
             if ($stmt->execute()) {
                 $bookingId = $this->conn->lastInsertId();
@@ -96,7 +96,7 @@ class Booking {
     public function getAllBookings() {
         try {
             $query = "SELECT b.*, u.full_name as user_name, u.email as user_email,
-                             r.name as room_name, r.capacity as room_capacity
+                             r.room_name, r.capacity as room_capacity
                       FROM " . $this->table_name . " b
                       LEFT JOIN users u ON b.user_id = u.id
                       LEFT JOIN meeting_rooms r ON b.room_id = r.id
@@ -118,7 +118,7 @@ class Booking {
     public function getBookingById($id) {
         try {
             $query = "SELECT b.*, u.full_name as user_name, u.email as user_email,
-                             r.name as room_name, r.capacity as room_capacity
+                             r.room_name, r.capacity as room_capacity
                       FROM " . $this->table_name . " b
                       LEFT JOIN users u ON b.user_id = u.id
                       LEFT JOIN meeting_rooms r ON b.room_id = r.id
@@ -140,7 +140,7 @@ class Booking {
      */
     public function getBookingsByUserId($userId) {
         try {
-            $query = "SELECT b.*, r.name as room_name, r.capacity as room_capacity
+            $query = "SELECT b.*, r.room_name, r.capacity as room_capacity
                       FROM " . $this->table_name . " b
                       LEFT JOIN meeting_rooms r ON b.room_id = r.id
                       WHERE b.user_id = :user_id
@@ -261,8 +261,8 @@ class Booking {
     public function saveAIConversation($userId, $sessionId, $data) {
         try {
             $query = "INSERT INTO ai_conversations 
-                     (user_id, session_id, message, ai_response, booking_state, booking_data)
-                     VALUES (:user_id, :session_id, :message, :ai_response, :booking_state, :booking_data)";
+                     (user_id, session_id, message, response, booking_state, booking_data)
+                     VALUES (:user_id, :session_id, :message, :response, :booking_state, :booking_data)";
 
             $stmt = $this->conn->prepare($query);
             
@@ -274,7 +274,7 @@ class Booking {
             $stmt->bindParam(":user_id", $userId);
             $stmt->bindParam(":session_id", $sessionId);
             $stmt->bindParam(":message", $message);
-            $stmt->bindParam(":ai_response", $aiResponse);
+            $stmt->bindParam(":response", $aiResponse);
             $stmt->bindParam(":booking_state", $bookingState);
             $stmt->bindParam(":booking_data", $bookingData);
 

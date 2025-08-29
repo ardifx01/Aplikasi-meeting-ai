@@ -4,11 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n FRONTEND,PHP -c green,cyan \"npm run dev:vite\" \"npm run dev:php\"",
+    "dev:vite": "vite",
+    "dev:php": "php -S 127.0.0.1:8080 -t .",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "concurrently": "^9.1.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

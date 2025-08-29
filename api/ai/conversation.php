@@ -171,7 +171,21 @@ function updateBookingData($conn, $data) {
         
         // Parse date and time
         $meetingDate = isset($bookingData['date']) ? $bookingData['date'] : null;
-        $meetingTime = isset($bookingData['time']) ? $bookingData['time'] : null;
+        $meetingTime = isset($bookingData['time']) ? trim($bookingData['time']) : null;
+
+        // Normalize meeting_time to HH:MM:SS if possible
+        if ($meetingTime) {
+            // If time is a range like "09:00 - 10:00", take the start time
+            if (preg_match('/^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$/', $meetingTime, $m)) {
+                $meetingTime = $m[1];
+            }
+            // Ensure proper format HH:MM:SS
+            if (preg_match('/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/', $meetingTime, $matches)) {
+                $meetingTime = sprintf('%02d:%02d:00', $matches[1], $matches[2]);
+            } else {
+                $meetingTime = '09:00:00';
+            }
+        }
         $participants = isset($bookingData['participants']) ? $bookingData['participants'] : null;
         $topic = isset($bookingData['topic']) ? $bookingData['topic'] : null;
         $meetingType = isset($bookingData['meetingType']) ? $bookingData['meetingType'] : 'internal';

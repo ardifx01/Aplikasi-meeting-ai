@@ -1,74 +1,133 @@
 import { Booking, BookingState } from '../types';
+import { getLastSuggestions } from './aiDatabaseService';
 import { MEETING_ROOMS } from '../constants';
 
 const findSuitableRoom = (participants: number) => {
   return MEETING_ROOMS.find(room => room.capacity >= participants);
 };
 
-// Helper function to parse date input
+// Helper: display value or placeholder to avoid "undefined"
+const displayValue = (value: unknown, placeholder: string = 'belum diisi') => {
+  if (value === 0) return '0';
+  if (value === false) return 'false';
+  if (value === true) return 'true';
+  return (value !== undefined && value !== null && String(value).trim() !== '')
+    ? String(value)
+    : placeholder;
+};
+
+// Helper: build confirmation summary safely
+const buildConfirmationSummary = (data: Partial<Booking>) => {
+  return `Sempurna! Mari saya konfirmasi detail pemesanan Anda:\n\n`
+    + `🏢 **Ruangan:** ${displayValue(data.roomName)}\n`
+    + `📋 **Topik:** ${displayValue(data.topic)}\n`
+    + `👤 **PIC:** ${displayValue(data.pic)}\n`
+    + `👥 **Peserta:** ${displayValue(data.participants)} orang\n`
+    + `📅 **Tanggal:** ${displayValue(data.date)}\n`
+    + `⏰ **Waktu:** ${displayValue(data.time)}\n`
+    + `🤝 **Jenis:** ${displayValue(data.meetingType)}\n`
+    + `🍽️ **Makanan:** ${displayValue(data.foodOrder)}\n\n`
+    + `Apakah semua informasi sudah benar?`;
+};
+
+// ===============================
+// PERBAIKAN: parseDateInput
+// ===============================
 const parseDateInput = (input: string): string => {
+  const now = new Date();
   const lowerInput = input.toLowerCase();
-  const today = new Date();
-  
-  if (lowerInput.includes('hari ini') || lowerInput.includes('sekarang')) {
-    return today.toLocaleDateString('id-ID', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-  } else if (lowerInput.includes('besok')) {
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    return tomorrow.toLocaleDateString('id-ID', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-  } else if (lowerInput.includes('lusa')) {
-    const dayAfterTomorrow = new Date(today);
-    dayAfterTomorrow.setDate(today.getDate() + 2);
-    return dayAfterTomorrow.toLocaleDateString('id-ID', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-  } else if (lowerInput.includes('minggu depan')) {
-    const nextWeek = new Date(today);
-    nextWeek.setDate(today.getDate() + 7);
-    return nextWeek.toLocaleDateString('id-ID', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+
+  if (lowerInput.includes("hari ini")) return now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  if (lowerInput.includes("besok")) {
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    return tomorrow.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   }
+  if (lowerInput.includes("lusa")) {
+    const dayAfter = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
+    return dayAfter.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+  if (lowerInput.includes("minggu depan")) {
+    const nextWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+    return nextWeek.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  // handle senin depan, rabu depan, dll
+  const hariMap: { [key: string]: number } = {
+    "minggu": 0, "senin": 1, "selasa": 2, "rabu": 3,
+    "kamis": 4, "jumat": 5, "sabtu": 6
+  };
+
+  for (const hari in hariMap) {
+    if (lowerInput.includes(hari)) {
+      let target = hariMap[hari];
+      let current = now.getDay();
+      let diff = target - current;
+      if (diff <= 0 || lowerInput.includes("depan")) {
+        diff += 7;
+      }
+      const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+      return targetDate.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+  }
+
+  // Format tanggal spesifik (contoh: 25 Agustus / 25/08/2025)
+  const monthMap: { [key: string]: number } = {
+    "januari": 0, "februari": 1, "maret": 2, "april": 3, "mei": 4, "juni": 5,
+    "juli": 6, "agustus": 7, "september": 8, "oktober": 9, "november": 10, "desember": 11
+  };
   
+  const regex = /(\d{1,2})[\/\-\s](\d{1,2}|\w+)([\/\-\s](\d{2,4}))?/;
+  const match = lowerInput.match(regex);
+  if (match) {
+    let day = parseInt(match[1]);
+    let month = isNaN(parseInt(match[2]))
+      ? monthMap[match[2]]
+      : parseInt(match[2]) - 1;
+    let year = match[4] ? parseInt(match[4]) : now.getFullYear();
+    const targetDate = new Date(year, month, day);
+    return targetDate.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
   return input;
 };
 
-// Helper function to parse time input
+// ===============================
+// PERBAIKAN: parseTimeInput
+// ===============================
 const parseTimeInput = (input: string): string => {
   const lowerInput = input.toLowerCase();
-  
-  // Handle time ranges like "09:00 - 10:00"
-  if (lowerInput.includes('-') || lowerInput.includes('sampai')) {
-    const timeMatch = lowerInput.match(/(\d{1,2}):?(\d{2})?/);
-    if (timeMatch) {
-      return timeMatch[0];
-    }
+
+  // format HH:MM atau HH.MM
+  let match = lowerInput.match(/(\d{1,2})[:.](\d{2})/);
+  if (match) {
+    let h = parseInt(match[1]);
+    let m = match[2];
+    if (h >= 0 && h <= 23) return `${h.toString().padStart(2, "0")}:${m}`;
   }
-  
-  // Handle specific times
-  const timeKeywords = ['09:00', '10:00', '13:00', '14:00', '15:00', '16:00'];
-  for (const time of timeKeywords) {
-    if (lowerInput.includes(time)) {
-      return time;
+
+  // format "jam 9", "pukul 14"
+  match = lowerInput.match(/(?:jam|pukul)\s?(\d{1,2})(?:\.(\d{2}))?/);
+  if (match) {
+    let h = parseInt(match[1]);
+    let m = match[2] || "00";
+
+    // cek AM/PM
+    if (lowerInput.includes("siang") || lowerInput.includes("sore") || lowerInput.includes("malam")) {
+      if (h < 12) h += 12;
     }
+    return `${h.toString().padStart(2, "0")}:${m}`;
   }
-  
+
+  // format "9 pagi", "2 siang"
+  match = lowerInput.match(/(\d{1,2})\s?(pagi|siang|sore|malam)/);
+  if (match) {
+    let h = parseInt(match[1]);
+    if (match[2] === "siang" || match[2] === "sore" || match[2] === "malam") {
+      if (h < 12) h += 12;
+    }
+    return `${h.toString().padStart(2, "0")}:00`;
+  }
+
   return input;
 };
 
@@ -101,6 +160,13 @@ const parseParticipantInput = (input: string): number | null => {
   return null;
 };
 
+// Quick actions helper for food selection
+const getFoodQuickActions = () => ([
+  { label: "Tidak perlu", actionValue: "tidak" },
+  { label: "Makanan Ringan", actionValue: "ringan" },
+  { label: "Makanan Berat", actionValue: "berat" }
+]);
+
 // Main function to process the conversational input and update state
 export const processBookingConversation = async (
   message: string,
@@ -113,7 +179,7 @@ export const processBookingConversation = async (
   finalBooking?: Booking;
   quickActions?: { label: string, actionValue: string }[];
 }> => {
-  await new Promise(resolve => setTimeout(resolve, 600)); // Simulate AI thinking
+  await new Promise(resolve => setTimeout(resolve, 800)); // Simulate AI thinking
   const lowerCaseMessage = message.toLowerCase().trim();
   
   let responseText = "";
@@ -123,44 +189,125 @@ export const processBookingConversation = async (
   let quickActions: { label: string, actionValue: string }[] | undefined = undefined;
 
   // Global "start over" check for "batal" or "stop"
-  if (lowerCaseMessage.includes('batal') || lowerCaseMessage.includes('stop')) {
+  if (lowerCaseMessage.includes('batal') || lowerCaseMessage.includes('stop') || lowerCaseMessage.includes('mulai ulang')) {
     newState = BookingState.IDLE;
     responseText = "Baik, pemesanan dibatalkan. Ada lagi yang bisa saya bantu?";
     updatedBookingData = {};
+    quickActions = undefined;
+    return { responseText, newState, updatedBookingData, finalBooking, quickActions };
+  }
+
+  // Global intercept: user explicitly wants to change time
+  if (
+    lowerCaseMessage.includes('ubah waktu') ||
+    lowerCaseMessage.includes('ganti waktu') ||
+    lowerCaseMessage.includes('ubah jam') ||
+    lowerCaseMessage.includes('ganti jam')
+  ) {
+    newState = BookingState.ASKING_TIME;
+    // clear previous time to force re-ask
+    if (updatedBookingData.time) delete (updatedBookingData as any).time;
+    responseText = "Baik, ingin ubah ke jam berapa? Tulis dalam format HH:MM atau rentang seperti 14:00 - 15:00.";
     quickActions = [
-      { label: "Pesan Ruangan Baru", actionValue: "start_booking" },
-      { label: "Bantuan", actionValue: "Bantuan" }
+      { label: '09:00', actionValue: '09:00' },
+      { label: '10:00', actionValue: '10:00' },
+      { label: '13:00', actionValue: '13:00' },
+      { label: '15:00', actionValue: '15:00' },
     ];
-  return { responseText, newState, updatedBookingData, finalBooking, quickActions };
+    return { responseText, newState, updatedBookingData, finalBooking, quickActions };
+  }
+
+  // Global intercept: quick confirm from any state when all data is ready
+  const isBookingComplete = !!(updatedBookingData.roomName && updatedBookingData.topic && updatedBookingData.pic &&
+    updatedBookingData.participants && updatedBookingData.date && updatedBookingData.time &&
+    updatedBookingData.meetingType && updatedBookingData.foodOrder);
+  if (isBookingComplete && (/(^|\b)(ya|benar|konfirm|konfirmasi)(\b|$)/i.test(lowerCaseMessage))) {
+    finalBooking = {
+      id: Date.now(),
+      roomName: updatedBookingData.roomName!,
+      roomId: updatedBookingData.roomId!,
+      topic: updatedBookingData.topic!,
+      pic: updatedBookingData.pic!,
+      participants: updatedBookingData.participants!,
+      date: updatedBookingData.date!,
+      time: updatedBookingData.time!,
+      meetingType: updatedBookingData.meetingType!,
+      foodOrder: updatedBookingData.foodOrder!
+    };
+    responseText = "🎉 Pemesanan berhasil dikonfirmasi! Terima kasih telah menggunakan layanan Spacio.";
+    quickActions = undefined;
+    return { responseText, newState, updatedBookingData, finalBooking, quickActions };
+  }
+  if (isBookingComplete && (/(^|\b)(tidak|batal)(\b|$)/i.test(lowerCaseMessage))) {
+    newState = BookingState.IDLE;
+    responseText = "Baik, pemesanan dibatalkan. Ada lagi yang bisa saya bantu?";
+    updatedBookingData = {};
+    quickActions = undefined;
+    return { responseText, newState, updatedBookingData, finalBooking, quickActions };
   }
   
   switch (state) {
     case BookingState.IDLE:
-      if (lowerCaseMessage.includes('pesan ruangan') || lowerCaseMessage === 'start_booking') {
+      console.log(`📍 Processing IDLE state with message: "${message}"`);
+      
+      // Check if user is directly selecting a room
+      const roomMatch = MEETING_ROOMS.find(room => {
+        const roomNameLower = room.name.toLowerCase();
+        return lowerCaseMessage.includes(roomNameLower) || roomNameLower.includes(lowerCaseMessage);
+      });
+      
+      if (roomMatch) {
+        console.log(`✅ Room selected: ${roomMatch.name}`);
+        updatedBookingData.roomName = roomMatch.name;
+        newState = BookingState.ASKING_TOPIC;
+        responseText = `Bagus! Ruangan yang dipilih: **${roomMatch.name}** 🏢\n\nKapasitas: ${roomMatch.capacity} orang\nFasilitas: ${roomMatch.facilities.join(', ')}\n\nSekarang, apa topik atau nama rapatnya? 📝`;
+        quickActions = undefined;
+      } else if (lowerCaseMessage.includes('pesan ruangan') || lowerCaseMessage === 'start_booking' || lowerCaseMessage.includes('booking')) {
         newState = BookingState.ASKING_ROOM;
-        responseText = "Baik, mari kita mulai pemesanan ruangan. Silakan pilih ruangan yang Anda inginkan:";
+        responseText = "Baik, mari kita mulai pemesanan ruangan! 🎯\n\nSilakan pilih ruangan yang Anda inginkan dari daftar di bawah ini:";
         quickActions = MEETING_ROOMS.map(room => ({
           label: `${room.name} (${room.capacity} orang)`,
           actionValue: room.name
         }));
-      } else if (lowerCaseMessage.includes("reservasi")) {
+      } else if (lowerCaseMessage.includes("reservasi") || lowerCaseMessage.includes("cek reservasi")) {
         responseText = "Fitur pengecekan reservasi sedang dalam pengembangan. Saat ini saya dapat membantu Anda memesan ruangan baru.";
-        quickActions = [
-          { label: "Pesan Ruangan Baru", actionValue: "start_booking" },
-          { label: "Bantuan", actionValue: "Bantuan" }
-        ];
-      } else if (lowerCaseMessage.includes("bantuan")) {
-        responseText = "Saya dapat membantu Anda memesan ruangan. Berikut adalah fitur yang tersedia:";
-        quickActions = [
-          { label: "Pesan Ruangan", actionValue: "start_booking" },
-          { label: "Ruang Besar (10+ orang)", actionValue: "Saya butuh ruangan untuk 10 orang atau lebih" },
-          { label: "Ruang Kecil (2-5 orang)", actionValue: "Saya butuh ruangan untuk 2-5 orang" },
-          { label: "Meeting Internal", actionValue: "Saya mau booking ruangan untuk meeting internal" },
-          { label: "Meeting Eksternal", actionValue: "Saya mau booking ruangan untuk meeting eksternal" }
-        ];
+        quickActions = undefined;
+      } else if (lowerCaseMessage.includes("bantuan") || lowerCaseMessage.includes("help")) {
+        responseText = "Saya dapat membantu Anda memesan ruangan dengan mudah! Berikut adalah fitur yang tersedia:\n\n🏢 **Pemesanan Ruangan** - Pilih ruangan sesuai kebutuhan\n👥 **Kapasitas** - Sesuaikan dengan jumlah peserta\n📅 **Jadwal** - Pilih tanggal dan waktu yang tepat\n🍽️ **Catering** - Pilih jenis makanan jika diperlukan\n\nSilakan ketik pesan Anda.";
+        quickActions = undefined;
+      }
+      // TAMBAHAN: Check if user is selecting topic when in IDLE state (for quick actions)
+      else if (lowerCaseMessage === "rapat tim" || lowerCaseMessage === "presentasi" || 
+               lowerCaseMessage === "meeting client" || lowerCaseMessage === "brainstorming" || 
+               lowerCaseMessage === "training" || lowerCaseMessage === "diskusi proyek") {
+        console.log(`📝 Topic selected in IDLE state: ${message}`);
+        // If user selects topic but no room selected yet, ask for room first
+        if (!updatedBookingData.roomName) {
+          responseText = "Baik! Tapi sebelum itu, silakan pilih ruangan terlebih dahulu:";
+          newState = BookingState.ASKING_ROOM;
+          quickActions = MEETING_ROOMS.map(room => ({
+            label: `${room.name} (${room.capacity} orang)`,
+            actionValue: room.name
+          }));
+        } else {
+          // If room already selected, proceed with topic
+          let topicName = message;
+          if (lowerCaseMessage === "rapat tim") topicName = "Rapat Tim";
+          else if (lowerCaseMessage === "presentasi") topicName = "Presentasi";
+          else if (lowerCaseMessage === "meeting client") topicName = "Meeting Client";
+          else if (lowerCaseMessage === "brainstorming") topicName = "Brainstorming";
+          else if (lowerCaseMessage === "training") topicName = "Training";
+          else if (lowerCaseMessage === "diskusi proyek") topicName = "Diskusi Proyek";
+          
+          updatedBookingData.topic = topicName;
+          newState = BookingState.ASKING_PIC;
+          responseText = `Baik, topiknya "${topicName}". Siapa PIC (Person in Charge) untuk rapat ini? 👤`;
+          quickActions = undefined;
+        }
       } else {
+        console.log(`❓ Unknown command, guiding to room selection`);
         // If we don't understand, guide user to start booking
-        responseText = "Baik, mari kita mulai pemesanan ruangan. Silakan pilih ruangan yang Anda inginkan:";
+        responseText = "Maaf, saya tidak mengerti maksud Anda. Mari kita mulai pemesanan ruangan! Silakan pilih ruangan yang Anda inginkan:";
         newState = BookingState.ASKING_ROOM;
         quickActions = MEETING_ROOMS.map(room => ({
           label: `${room.name} (${room.capacity} orang)`,
@@ -170,153 +317,148 @@ export const processBookingConversation = async (
       break;
 
     case BookingState.ASKING_ROOM:
-      // Universal room matching logic that works for ALL room names
-      const selectedRoom = MEETING_ROOMS.find(room => {
+      // Enhanced room matching logic with better fallback handling
+      
+      // Find the best matching room by scoring each one
+      let bestMatch = null;
+      let bestScore = 0;
+      
+      MEETING_ROOMS.forEach(room => {
         const roomNameLower = room.name.toLowerCase();
         const messageLower = lowerCaseMessage;
+        let score = 0;
         
-        // Debug logging
-        console.log(`Checking room: "${room.name}" against message: "${message}"`);
-        console.log(`Room name lower: "${roomNameLower}", Message lower: "${messageLower}"`);
-        
-        // 1. Exact match (case insensitive)
+        // 1. Exact match (case insensitive) - Highest priority (score: 100)
         if (messageLower === roomNameLower) {
-          console.log(`Exact match found: ${room.name}`);
-          return true;
+          score = 100;
+        }
+        // 2. Contains match - message contains room name (score: 90)
+        else if (messageLower.includes(roomNameLower)) {
+          score = 90;
+        }
+        // 3. Room name contains message (score: 80)
+        else if (roomNameLower.includes(messageLower)) {
+          score = 80;
+        }
+        // 4. Specific room name keyword match (score: 70)
+        else {
+          const roomKeywords = ['samudrantha', 'cedaya', 'celebes', 'kalamanthana', 'nusanipa', 'balidwipa', 'swarnadwipa', 'jawadwipa'];
+          const matchedKeyword = roomKeywords.find(keyword => messageLower.includes(keyword));
+          
+          if (matchedKeyword && roomNameLower.includes(matchedKeyword)) {
+            score = 70;
+          }
+          // 5. Partial keyword match (score: 60)
+          else if (matchedKeyword) {
+            const partialMatch = roomKeywords.find(keyword => 
+              messageLower.includes(keyword.substring(0, 4)) || 
+              messageLower.includes(keyword.substring(keyword.length - 4)) ||
+              messageLower.includes(keyword.substring(0, Math.floor(keyword.length / 2)))
+            );
+            
+            if (partialMatch && roomNameLower.includes(partialMatch)) {
+              score = 60;
+            }
+            // 6. Generic word match (score: 30)
+            else if (messageLower.includes('meeting') && roomNameLower.includes('meeting')) {
+              score = 30;
+            }
+            else if (messageLower.includes('room') && roomNameLower.includes('room')) {
+              score = 25;
+            }
+            else if (messageLower.includes('auditorium') && roomNameLower.includes('auditorium')) {
+              score = 20;
+            }
+            // 7. Number match for auditoriums (score: 15)
+            else if (messageLower.includes('1') && roomNameLower.includes('1')) {
+              score = 15;
+            }
+            else if (messageLower.includes('2') && roomNameLower.includes('2')) {
+              score = 15;
+            }
+          }
         }
         
-        // 2. Contains match - message contains room name or room name contains message
-        if (messageLower.includes(roomNameLower) || roomNameLower.includes(messageLower)) {
-          console.log(`Contains match found: ${room.name}`);
-          return true;
+        // Update best match if this room has a higher score
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = room;
         }
-        
-        // 3. First word match - check if message contains first word of room name
-        const roomWords = roomNameLower.split(' ');
-        const firstWord = roomWords[0];
-        if (firstWord.length > 2 && messageLower.includes(firstWord)) {
-          console.log(`First word match found: ${room.name} (first word: ${firstWord})`);
-          return true;
-        }
-        
-        // 4. Any word match - check if message contains any word from room name
-        if (roomWords.some(word => word.length > 2 && messageLower.includes(word))) {
-          console.log(`Any word match found: ${room.name}`);
-          return true;
-        }
-        
-        // 5. Partial word match - check if any word from room name is contained in message
-        if (roomWords.some(word => word.length > 2 && messageLower.includes(word))) {
-          console.log(`Partial word match found: ${room.name}`);
-          return true;
-        }
-        
-        // 6. Specific room name matches (more flexible)
-        if (messageLower.includes('samudrantha') && roomNameLower.includes('samudrantha')) {
-          console.log(`Samudrantha match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('cedaya') && roomNameLower.includes('cedaya')) {
-          console.log(`Cedaya match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('celebes') && roomNameLower.includes('celebes')) {
-          console.log(`Celebes match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('kalamanthana') && roomNameLower.includes('kalamanthana')) {
-          console.log(`Kalamanthana match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('nusanipa') && roomNameLower.includes('nusanipa')) {
-          console.log(`Nusanipa match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('balidwipa') && roomNameLower.includes('balidwipa')) {
-          console.log(`Balidwipa match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('swarnadwipa') && roomNameLower.includes('swarnadwipa')) {
-          console.log(`Swarnadwipa match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('jawadwipa') && roomNameLower.includes('jawadwipa')) {
-          console.log(`Jawadwipa match found: ${room.name}`);
-          return true;
-        }
-        
-        // 7. Additional flexible matching for common variations
-        if (messageLower.includes('meeting') && roomNameLower.includes('meeting')) {
-          console.log(`Meeting keyword match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('room') && roomNameLower.includes('room')) {
-          console.log(`Room keyword match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('auditorium') && roomNameLower.includes('auditorium')) {
-          console.log(`Auditorium keyword match found: ${room.name}`);
-          return true;
-        }
-        
-        // 8. Number matching for auditoriums
-        if (messageLower.includes('1') && roomNameLower.includes('1')) {
-          console.log(`Number 1 match found: ${room.name}`);
-          return true;
-        }
-        if (messageLower.includes('2') && roomNameLower.includes('2')) {
-          console.log(`Number 2 match found: ${room.name}`);
-          return true;
-        }
-        
-        return false;
       });
       
-      console.log(`Selected room result:`, selectedRoom);
-      
-      if (selectedRoom) {
-        updatedBookingData.roomName = selectedRoom.name;
+      // Only proceed if we have a good enough match (score >= 60)
+      if (bestMatch && bestScore >= 60) {
+        updatedBookingData.roomName = bestMatch.name;
         newState = BookingState.ASKING_TOPIC;
-        responseText = `Baik, ruangan yang dipilih: **${selectedRoom.name}** (kapasitas ${selectedRoom.capacity} orang). Sekarang apa topik atau nama rapatnya?`;
-        quickActions = [
-          { label: "Rapat Tim", actionValue: "Rapat Tim" },
-          { label: "Presentasi", actionValue: "Presentasi" },
-          { label: "Meeting Client", actionValue: "Meeting Client" },
-          { label: "Brainstorming", actionValue: "Brainstorming" },
-          { label: "Training", actionValue: "Training" },
-          { label: "Lainnya", actionValue: "Lainnya" }
-        ];
-        console.log(`Room selected successfully: ${selectedRoom.name}, moving to ASKING_TOPIC state`);
+        responseText = `Bagus! Ruangan yang dipilih: **${bestMatch.name}** 🏢\n\nKapasitas: ${bestMatch.capacity} orang\nFasilitas: ${bestMatch.facilities.join(', ')}\n\nSekarang, apa topik atau nama rapatnya? 📝`;
+        quickActions = undefined;
       } else {
-        responseText = "Silakan pilih ruangan dari daftar yang tersedia:";
+        responseText = "Maaf, saya tidak menemukan ruangan yang sesuai. Silakan pilih ruangan dari daftar yang tersedia:";
         quickActions = MEETING_ROOMS.map(room => ({
           label: `${room.name} (${room.capacity} orang)`,
           actionValue: room.name
         }));
-        console.log(`No room match found, staying in ASKING_ROOM state`);
       }
       break;
 
+    // ===============================
+    // PERBAIKAN: ASKING_TOPIC
+    // ===============================
     case BookingState.ASKING_TOPIC:
-      updatedBookingData.topic = message;
-      newState = BookingState.ASKING_PIC;
-      responseText = `Baik, topik rapatnya "${message}". Siapa PIC (Person in Charge) untuk rapat ini?`;
-      quickActions = [
-        { label: "Saya sendiri", actionValue: "Saya sendiri" },
-        { label: "Manager", actionValue: "Manager" },
-        { label: "Team Lead", actionValue: "Team Lead" }
-      ];
+      {
+        console.log(`📝 ASKING_TOPIC: Processing message "${message}" in state ${state}`);
+        const lowerMsg = message.toLowerCase();
+        let matchedTopic = null;
+
+        // Prioritas langsung (keyword spesifik)
+        if (lowerMsg.includes("rapat tim") || lowerMsg === "rapat tim") {
+          matchedTopic = "Rapat Tim";
+        } else if (lowerMsg.includes("meeting client") || lowerMsg === "meeting client") {
+          matchedTopic = "Meeting Client";
+        } else if (lowerMsg.includes("presentasi") || lowerMsg === "presentasi") {
+          matchedTopic = "Presentasi";
+        } else if (lowerMsg.includes("brainstorming") || lowerMsg === "brainstorming") {
+          matchedTopic = "Brainstorming";
+        } else if (lowerMsg.includes("diskusi proyek") || lowerMsg === "diskusi proyek") {
+          matchedTopic = "Diskusi Proyek";
+        } else if (lowerMsg.includes("training") || lowerMsg === "training") {
+          matchedTopic = "Training";
+        } else if (lowerMsg.includes("client") || lowerMsg.includes("klien") || lowerMsg.includes("customer")) {
+          matchedTopic = "Meeting Client";
+        } else if (lowerMsg.includes("internal") || lowerMsg.includes("team") || lowerMsg.includes("tim")) {
+          matchedTopic = "Rapat Tim";
+        } else if (lowerMsg.includes("proyek") || lowerMsg.includes("project")) {
+          matchedTopic = "Diskusi Proyek";
+        } else if (lowerMsg.includes("brainstorm") || lowerMsg.includes("ide")) {
+          matchedTopic = "Brainstorming";
+        }
+
+        console.log(`📝 ASKING_TOPIC: matchedTopic = "${matchedTopic}", message.length = ${message.length}`);
+
+        // validasi minimal
+        const finalTopic = matchedTopic ?? message.trim();
+        if (finalTopic.length < 2) {
+          responseText = "Mohon masukkan topik rapat yang lebih spesifik (minimal 2 karakter).";
+          quickActions = undefined;
+        } else {
+          updatedBookingData.topic = finalTopic;
+          newState = BookingState.ASKING_PIC;
+          responseText = `Baik, topiknya "${finalTopic}". Siapa PIC (Person in Charge) untuk rapat ini? 👤`;
+          quickActions = undefined;
+        }
+      }
       break;
 
     case BookingState.ASKING_PIC:
-      updatedBookingData.pic = message;
-      newState = BookingState.ASKING_PARTICIPANTS;
-      responseText = `Baik, PIC-nya adalah "${message}". Berapa jumlah peserta yang akan hadir?`;
-        quickActions = [
-        { label: "2-5 orang", actionValue: "2-5" },
-        { label: "6-10 orang", actionValue: "6-10" },
-        { label: "10+ orang", actionValue: "10+" }
-      ];
+      if (message.trim().length < 2) {
+        responseText = "Mohon masukkan nama PIC yang valid (minimal 2 karakter).";
+        quickActions = undefined;
+      } else {
+        updatedBookingData.pic = message;
+        newState = BookingState.ASKING_PARTICIPANTS;
+        responseText = `Baik! PIC-nya adalah **"${message}"** 👤\n\nBerapa jumlah peserta yang akan hadir? 👥`;
+        quickActions = undefined;
+      }
       break;
 
     case BookingState.ASKING_PARTICIPANTS:
@@ -324,13 +466,7 @@ export const processBookingConversation = async (
       const participants = parseParticipantInput(message);
       if (participants === null || participants < 1) {
         responseText = "Mohon masukkan jumlah peserta yang valid (minimal 1 orang).";
-        quickActions = [
-          { label: "2 orang", actionValue: "2" },
-          { label: "5 orang", actionValue: "5" },
-          { label: "8 orang", actionValue: "8" },
-          { label: "10 orang", actionValue: "10" },
-          { label: "15 orang", actionValue: "15" }
-        ];
+        quickActions = undefined;
       } else {
         updatedBookingData.participants = participants;
         
@@ -338,31 +474,17 @@ export const processBookingConversation = async (
         if (updatedBookingData.roomName) {
           const selectedRoom = MEETING_ROOMS.find(room => room.name === updatedBookingData.roomName);
           if (selectedRoom && participants > selectedRoom.capacity) {
-            responseText = `Maaf, ruangan **${selectedRoom.name}** hanya bisa menampung maksimal ${selectedRoom.capacity} orang. Apakah Anda ingin memilih ruangan lain atau mengurangi jumlah peserta?`;
-            quickActions = [
-              { label: "Pilih Ruangan Lain", actionValue: "pilih ruangan lain" },
-              { label: "Kurangi Peserta", actionValue: "kurangi peserta" },
-              { label: "Batal", actionValue: "batal" }
-            ];
+            responseText = `⚠️ **Peringatan Kapasitas**\n\nRuangan **${selectedRoom.name}** hanya bisa menampung maksimal ${selectedRoom.capacity} orang.\n\nJumlah peserta Anda: ${participants} orang\n\nApakah Anda ingin memilih ruangan lain atau mengurangi jumlah peserta?`;
+            quickActions = undefined;
           } else {
             newState = BookingState.ASKING_DATE;
-            responseText = `Baik, jumlah peserta ${participants} orang. Kapan rapat akan diadakan?`;
-          quickActions = [
-              { label: "Hari Ini", actionValue: "hari ini" },
-              { label: "Besok", actionValue: "besok" },
-              { label: "Lusa", actionValue: "lusa" },
-              { label: "Minggu Depan", actionValue: "minggu depan" }
-            ];
+            responseText = `Bagus! Jumlah peserta: **${participants} orang** 👥\n\nKapan rapat akan diadakan? 📅`;
+            quickActions = undefined;
           }
         } else {
           newState = BookingState.ASKING_DATE;
-          responseText = `Baik, jumlah peserta ${participants} orang. Kapan rapat akan diadakan?`;
-          quickActions = [
-            { label: "Hari Ini", actionValue: "hari ini" },
-            { label: "Besok", actionValue: "besok" },
-            { label: "Lusa", actionValue: "lusa" },
-            { label: "Minggu Depan", actionValue: "minggu depan" }
-          ];
+          responseText = `Bagus! Jumlah peserta: **${participants} orang** 👥\n\nKapan rapat akan diadakan? 📅`;
+          quickActions = undefined;
         }
       }
       break;
@@ -370,50 +492,101 @@ export const processBookingConversation = async (
     case BookingState.ASKING_DATE:
       // Parse the date input properly
       const parsedDate = parseDateInput(message);
-      updatedBookingData.date = parsedDate;
-      newState = BookingState.ASKING_TIME;
-      responseText = `Baik, tanggal rapatnya "${parsedDate}". Jam berapa rapat akan dimulai?`;
-      quickActions = [
-        { label: "09:00", actionValue: "09:00" },
-        { label: "10:00", actionValue: "10:00" },
-        { label: "13:00", actionValue: "13:00" },
-        { label: "14:00", actionValue: "14:00" },
-        { label: "15:00", actionValue: "15:00" }
-      ];
+      if (parsedDate === message && !lowerCaseMessage.includes('hari ini') && !lowerCaseMessage.includes('besok') && !lowerCaseMessage.includes('lusa') && !lowerCaseMessage.includes('minggu depan')) {
+        responseText = "Mohon pilih tanggal yang valid atau gunakan opsi yang tersedia.";
+        quickActions = undefined;
+      } else {
+        updatedBookingData.date = parsedDate;
+        newState = BookingState.ASKING_TIME;
+        responseText = `Bagus! Tanggal rapat: **"${parsedDate}"** 📅\n\nJam berapa rapat akan dimulai? ⏰`;
+        quickActions = undefined;
+      }
       break;
 
     case BookingState.ASKING_TIME:
-      // Parse the time input properly
+      // Intercept: if user already clicks meeting type buttons while state is still ASKING_TIME
+      if (/(^|\b)(internal|in-house|tim|team)(\b|$)/i.test(lowerCaseMessage)) {
+        updatedBookingData.meetingType = "internal";
+        newState = BookingState.ASKING_FOOD_TYPE;
+        responseText = `Baik, jenis rapatnya internal. Apakah perlu memesan makanan? 🍽️`;
+        quickActions = getFoodQuickActions();
+        break;
+      }
+      if (/(^|\b)(eksternal|external|client|klien|customer)(\b|$)/i.test(lowerCaseMessage)) {
+        updatedBookingData.meetingType = "external";
+        newState = BookingState.ASKING_FOOD_TYPE;
+        responseText = `Baik, jenis rapatnya eksternal. Apakah perlu memesan makanan? 🍽️`;
+        quickActions = getFoodQuickActions();
+        break;
+      }
+
+      // Intercept: user already clicks food quick buttons while state still ASKING_TIME
+      if (lowerCaseMessage.includes('tidak') || lowerCaseMessage.includes('ringan') || lowerCaseMessage.includes('berat')) {
+        if (lowerCaseMessage.includes('tidak')) {
+          updatedBookingData.foodOrder = 'tidak';
+        } else if (lowerCaseMessage.includes('ringan')) {
+          updatedBookingData.foodOrder = 'ringan';
+        } else {
+          updatedBookingData.foodOrder = 'berat';
+        }
+
+        newState = BookingState.CONFIRMING;
+        responseText = buildConfirmationSummary(updatedBookingData);
+        quickActions = undefined;
+        break;
+      }
+
+      // Parse and validate time: allow start between 09:00 and 17:00
       const parsedTime = parseTimeInput(message);
-      updatedBookingData.time = parsedTime;
-      newState = BookingState.ASKING_MEETING_TYPE;
-      responseText = `Baik, jam rapatnya "${parsedTime}". Apa jenis rapatnya?`;
-      quickActions = [
-        { label: "Internal", actionValue: "internal" },
-        { label: "Eksternal", actionValue: "eksternal" }
-      ];
+      const timeMatch = parsedTime.match(/^(\d{1,2}):([0-5]\d)$/);
+      if (!timeMatch) {
+        responseText = "Mohon pilih waktu yang valid. Format yang didukung misalnya: 09:00, 10.30, jam 9, pukul 14, 2 siang.";
+        quickActions = undefined;
+      } else {
+        const hour = parseInt(timeMatch[1]);
+        if (hour < 9 || hour > 17) {
+          responseText = "Jam rapat hanya dapat dimulai antara 09:00 hingga 17:00.";
+          quickActions = undefined;
+        } else {
+          updatedBookingData.time = parsedTime;
+          newState = BookingState.ASKING_MEETING_TYPE;
+          responseText = `Bagus! Waktu rapat: **"${parsedTime}"** ⏰\n\nApa jenis rapatnya? 🤝`;
+          quickActions = [
+            { label: "Internal", actionValue: "internal" },
+            { label: "Eksternal", actionValue: "eksternal" }
+          ];
+        }
+      }
       break;
 
+    // ===============================
+    // PERBAIKAN: ASKING_MEETING_TYPE
+    // ===============================
     case BookingState.ASKING_MEETING_TYPE:
-      if (lowerCaseMessage.includes('internal') || lowerCaseMessage.includes('eksternal')) {
-        updatedBookingData.meetingType = lowerCaseMessage.includes('internal') ? 'internal' : 'external';
-        newState = BookingState.ASKING_FOOD_TYPE;
-        responseText = `Baik, jenis rapat ${updatedBookingData.meetingType}. Apakah perlu memesan makanan?`;
-        quickActions = [
-          { label: "Tidak pesan makanan", actionValue: "tidak" },
-          { label: "Makanan Ringan", actionValue: "ringan" },
-          { label: "Makanan Berat", actionValue: "berat" }
-        ];
-      } else {
-        responseText = "Mohon pilih jenis rapat yang valid.";
-        quickActions = [
-          { label: "Internal", actionValue: "internal" },
-          { label: "Eksternal", actionValue: "eksternal" }
-        ];
+      {
+        const lowerCaseMessage = message.toLowerCase();
+        if (lowerCaseMessage.match(/internal|in-house|tim|team/)) {
+          updatedBookingData.meetingType = "internal";
+          newState = BookingState.ASKING_FOOD_TYPE;
+          responseText = `Baik, jenis rapatnya internal. Apakah perlu memesan makanan? 🍽️`;
+          quickActions = getFoodQuickActions();
+        } else if (lowerCaseMessage.match(/eksternal|external|client|klien|customer/)) {
+          updatedBookingData.meetingType = "external";
+          newState = BookingState.ASKING_FOOD_TYPE;
+          responseText = `Baik, jenis rapatnya eksternal. Apakah perlu memesan makanan? 🍽️`;
+          quickActions = getFoodQuickActions();
+        } else {
+          responseText = "Apakah rapat ini internal atau eksternal?";
+          quickActions = [
+            { label: "Internal", actionValue: "internal" },
+            { label: "Eksternal", actionValue: "eksternal" }
+          ];
+        }
       }
       break;
 
     case BookingState.ASKING_FOOD_TYPE:
+      // Intercept: quick buttons should directly move to confirming
       if (lowerCaseMessage.includes('tidak') || lowerCaseMessage.includes('ringan') || lowerCaseMessage.includes('berat')) {
         if (lowerCaseMessage.includes('tidak')) {
           updatedBookingData.foodOrder = 'tidak';
@@ -424,74 +597,51 @@ export const processBookingConversation = async (
         }
         
         newState = BookingState.CONFIRMING;
-        responseText = `Baik, jenis makanan: ${updatedBookingData.foodOrder === 'tidak' ? 'Tidak pesan makanan' : updatedBookingData.foodOrder === 'ringan' ? 'Makanan Ringan' : 'Makanan Berat'}. \n\nBerikut rincian lengkap pemesanan:\n- **Ruangan**: ${updatedBookingData.roomName}\n- **Topik**: ${updatedBookingData.topic}\n- **PIC**: ${updatedBookingData.pic}\n- **Tanggal**: ${updatedBookingData.date}\n- **Waktu**: ${updatedBookingData.time}\n- **Peserta**: ${updatedBookingData.participants} orang\n- **Jenis Rapat**: ${updatedBookingData.meetingType}\n- **Jenis Makanan**: ${updatedBookingData.foodOrder === 'tidak' ? 'Tidak pesan makanan' : updatedBookingData.foodOrder === 'ringan' ? 'Makanan Ringan' : 'Makanan Berat'}\n\nApakah detailnya sudah benar dan ingin saya pesan sekarang?`;
+        responseText = buildConfirmationSummary(updatedBookingData);
         quickActions = [
-          { label: "Ya, Konfirmasi", actionValue: 'ya' }, 
-          { label: "Ubah Detail", actionValue: "ubah detail" },
-          { label: "Batal", actionValue: "batal" }
+          { label: "Ya, konfirmasi", actionValue: "ya" },
+          { label: "Tidak, batal", actionValue: "tidak" }
         ];
       } else {
         responseText = "Mohon pilih jenis makanan yang valid.";
-        quickActions = [
-          { label: "Tidak pesan makanan", actionValue: "tidak" },
-          { label: "Makanan Ringan", actionValue: "ringan" },
-          { label: "Makanan Berat", actionValue: "berat" }
-        ];
+        quickActions = getFoodQuickActions();
       }
       break;
 
     case BookingState.CONFIRMING:
-      if (['ya', 'iya', 'konfirmasi', 'betul', 'benar', 'ok'].some(word => lowerCaseMessage.includes(word))) {
-        newState = BookingState.BOOKED;
-        responseText = `Reservasi berhasil! Ruangan **${updatedBookingData.roomName}** sudah dipesan untuk Anda. Sampai jumpa!`;
+      if (lowerCaseMessage.includes('ya') || lowerCaseMessage.includes('benar') || lowerCaseMessage.includes('konfirm')) {
+        // Create final booking object
         finalBooking = {
           id: Date.now(),
           roomName: updatedBookingData.roomName!,
+          roomId: updatedBookingData.roomId!,
           topic: updatedBookingData.topic!,
+          pic: updatedBookingData.pic!,
+          participants: updatedBookingData.participants!,
           date: updatedBookingData.date!,
           time: updatedBookingData.time!,
-          participants: updatedBookingData.participants!,
-          pic: updatedBookingData.pic!,
           meetingType: updatedBookingData.meetingType!,
-          foodOrder: updatedBookingData.foodOrder!,
+          foodOrder: updatedBookingData.foodOrder!
         };
+        responseText = "🎉 Pemesanan berhasil dikonfirmasi! Terima kasih telah menggunakan layanan Spacio.";
+        quickActions = undefined;
+      } else if (lowerCaseMessage.includes('tidak') || lowerCaseMessage.includes('batal')) {
+        newState = BookingState.IDLE;
+        responseText = "Baik, pemesanan dibatalkan. Ada lagi yang bisa saya bantu?";
         updatedBookingData = {};
-        quickActions = [
-          { label: "Pesan Ruangan Baru", actionValue: "start_booking" },
-          { label: "Lihat Reservasi", actionValue: "Cek reservasi saya" },
-          { label: "Bantuan", actionValue: "Bantuan" }
-        ];
-      } else if (lowerCaseMessage.includes('ubah detail') || lowerCaseMessage.includes('ubah')) {
-        responseText = "Baik, bagian mana yang ingin diubah?";
-        quickActions = [
-          { label: "Ubah Ruangan", actionValue: "ubah ruangan" },
-          { label: "Ubah Topik", actionValue: "ubah topik" },
-          { label: "Ubah PIC", actionValue: "ubah pic" },
-          { label: "Ubah Peserta", actionValue: "ubah peserta" },
-          { label: "Ubah Tanggal", actionValue: "ubah tanggal" },
-          { label: "Ubah Waktu", actionValue: "ubah waktu" },
-          { label: "Ubah Jenis Rapat", actionValue: "ubah jenis rapat" },
-          { label: "Ubah Makanan", actionValue: "ubah makanan" }
-        ];
+        quickActions = undefined;
       } else {
-        responseText = "Mohon konfirmasi apakah Anda ingin memesan ruangan ini atau membatalkannya?";
-        quickActions = [
-          { label: "Ya, Konfirmasi", actionValue: "ya" },
-          { label: "Tidak, Batal", actionValue: "batal" },
-          { label: "Ubah Detail", actionValue: "ubah detail" }
-        ];
+        responseText = "Mohon konfirmasi dengan mengetik 'ya' untuk melanjutkan atau 'tidak' untuk membatalkan.";
+        quickActions = undefined;
       }
       break;
-      
-    case BookingState.BOOKED:
-        newState = BookingState.IDLE;
-        responseText = "Halo, ada lagi yang bisa saya bantu?";
-        quickActions = [
-          { label: "Pesan Ruangan Baru", actionValue: "start_booking" },
-          { label: "Lihat Reservasi", actionValue: "Cek reservasi saya" },
-          { label: "Bantuan", actionValue: "Bantuan" }
-        ];
-        break;
+
+    default:
+      responseText = "Maaf, terjadi kesalahan sistem. Mari mulai ulang pemesanan.";
+      newState = BookingState.IDLE;
+      updatedBookingData = {};
+      quickActions = undefined;
+      break;
   }
 
   return { responseText, newState, updatedBookingData, finalBooking, quickActions };

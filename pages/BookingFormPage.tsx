@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import { Page, type MeetingRoom, type Booking } from '../types';
+import { ApiService } from '../src/config/api';
 import { BackArrowIcon } from '../components/icons';
 import { MEETING_ROOMS } from '../constants';
 
@@ -31,7 +32,9 @@ const BookingFormPage: React.FC<BookingFormPageProps> = ({ onNavigate, room, onB
     }, []);
 
     const handleTimeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        setTime(e.target.value);
+        // Normalisasi segera: ganti titik menjadi titik dua (beberapa locale menuliskan 15.34)
+        const val = (e.target.value || '').replace(/\./g, ':');
+        setTime(val);
     }, []);
 
     const handleDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,7 +59,7 @@ const BookingFormPage: React.FC<BookingFormPageProps> = ({ onNavigate, room, onB
         setSelectedRoom(room);
     }, []);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
         if (!selectedRoom) {
@@ -69,19 +72,123 @@ const BookingFormPage: React.FC<BookingFormPageProps> = ({ onNavigate, room, onB
             return;
         }
 
-        const newBooking: Booking = {
-            id: Date.now(),
-            roomName: selectedRoom.name,
-            topic,
-            date,
-            time,
-            participants,
-            pic,
-            meetingType,
-            foodOrder,
-        };
+        // 1) Ambil user_id dari localStorage (hasil login)
+        const userDataStr = localStorage.getItem('user_data');
+        const userData = userDataStr ? JSON.parse(userDataStr) : null;
+        const userId = userData?.id || 1; // fallback ke user_id 1 (admin) yang pasti ada
         
-        onBookingConfirmed(newBooking);
+        console.log('User data from localStorage:', userData);
+        console.log('Using userId:', userId);
+
+        // 2) Siapkan payload sesuai backend (POST /bookings)
+        // Helper: extract start time and duration robustly (handles "12:00 - 13:00" atau "12:00 – 13:00")
+        const getTimes = (range: string): { start?: string; end?: string } => {
+            if (!range) return {};
+            const cleaned = range.replace(/\./g, ':');
+            // If input is type="time", it will be HH:MM
+            const simple = cleaned.match(/^(\d{1,2}):(\d{2})$/);
+            if (simple) return { start: cleaned };
+
+            const matches = cleaned.match(/(\d{1,2}:\d{2})/g);
+            if (matches && matches.length >= 2) {
+                return { start: matches[0], end: matches[1] };
+            } else if (matches && matches.length === 1) {
+                return { start: matches[0] };
+            }
+            return { start: cleaned };
+        };
+        const times = getTimes(time);
+
+        // Helper: normalize HH:MM to HH:MM:00
+        const normalizeTime = (t?: string) => {
+            if (!t) return '';
+            const val = t.replace(/\./g, ':');
+            const m = val.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+            if (m) {
+                const hh = String(Math.min(23, Math.max(0, parseInt(m[1], 10)))).padStart(2, '0');
+                const mm = String(Math.min(59, Math.max(0, parseInt(m[2], 10)))).padStart(2, '0');
+                return `${hh}:${mm}:00`;
+            }
+            return val;
+        };
+        const durationMinutes = (() => {
+            if (times.start && times.end) {
+                const [sH, sM] = times.start.split(':').map(Number);
+                const [eH, eM] = times.end.split(':').map(Number);
+                const diff = eH * 60 + eM - (sH * 60 + sM);
+                return diff > 0 ? diff : 60;
+            }
+            return 60;
+        })();
+
+        // 3) Cocokkan room_id dengan data di database (fallback ke null jika belum ada)
+        let resolvedRoomId: number | null = selectedRoom.id;
+        try {
+            const roomsResp = await ApiService.getAllRooms();
+            const rooms = roomsResp?.data || [];
+            const found = rooms.find((r: any) => {
+                const a = (r.name || r.room_name || '').toLowerCase();
+                const b = selectedRoom.name.toLowerCase();
+                return a.includes(b) || b.includes(a);
+            });
+            resolvedRoomId = found ? found.id : null;
+        } catch {}
+
+        // Final guards
+        if (!times.start) {
+            alert('Waktu rapat wajib diisi. Contoh: 14:00 atau 14:00 - 15:00');
+            return;
+        }
+
+        if (!resolvedRoomId) {
+            alert('Ruangan tidak valid. Mohon pilih ruangan yang tersedia.');
+            return;
+        }
+
+        const payload = {
+            user_id: userId,
+            room_id: resolvedRoomId,
+            topic,
+            meeting_date: date,
+            meeting_time: normalizeTime(times.start || time),
+            duration: durationMinutes,
+            participants,
+            meeting_type: meetingType || 'internal',
+            food_order: foodOrder || 'tidak',
+            booking_state: 'BOOKED'
+        } as any;
+
+        try {
+            console.log('Sending booking payload:', payload);
+            const res = await ApiService.createBooking(payload);
+            console.log('Booking response:', res);
+            
+            // 3) Konversi response ke tipe Booking frontend untuk halaman konfirmasi
+            const newBooking: Booking = {
+                id: res?.data?.id || Date.now(),
+                roomName: selectedRoom.name,
+                topic,
+                date,
+                time,
+                participants,
+                pic,
+                meetingType,
+                foodOrder,
+            };
+            onBookingConfirmed(newBooking);
+        } catch (err: any) {
+            console.error('Gagal menyimpan booking ke backend:', err);
+            console.error('Error details:', err.message, err.response);
+            
+            let errorMessage = 'Gagal menyimpan booking ke server. Mohon coba lagi.';
+            if (err.message && err.message.includes('Room is not available')) {
+                errorMessage = 'Ruangan tidak tersedia pada waktu yang dipilih. Silakan pilih waktu atau ruangan lain.';
+            } else if (err.message && err.message.includes('required')) {
+                errorMessage = 'Data tidak lengkap. Mohon isi semua field yang diperlukan.';
+            }
+            
+            alert(errorMessage);
+        }
     }
 
     const FormInput: React.FC<{ label: string; id: string; type?: string; value: string | number; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; required?: boolean; min?: number; placeholder?: string }> = 
@@ -161,8 +268,8 @@ const BookingFormPage: React.FC<BookingFormPageProps> = ({ onNavigate, room, onB
                             type="text" 
                             id="topic" 
                             name="topic" 
-                            defaultValue={topic}
-                            onBlur={(e) => setTopic(e.target.value)}
+                            value={topic}
+                            onChange={handleTopicChange}
                             placeholder="Masukkan topik atau nama rapat"
                             autoComplete="off"
                             spellCheck="false"
@@ -175,8 +282,8 @@ const BookingFormPage: React.FC<BookingFormPageProps> = ({ onNavigate, room, onB
                             type="text" 
                             id="pic" 
                             name="pic" 
-                            defaultValue={pic}
-                            onBlur={(e) => setPic(e.target.value)}
+                            value={pic}
+                            onChange={handlePicChange}
                             placeholder="Masukkan nama PIC"
                             autoComplete="off"
                             spellCheck="false"
@@ -211,11 +318,11 @@ const BookingFormPage: React.FC<BookingFormPageProps> = ({ onNavigate, room, onB
                     <div>
                         <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">Waktu Rapat:</label>
                         <input 
-                            type="text" 
+                            type="time" 
                             id="time" 
                             name="time" 
-                            defaultValue={time}
-                            onBlur={(e) => setTime(e.target.value)}
+                            value={time}
+                            onChange={handleTimeChange}
                             placeholder="e.g., 14:00 - 15:00"
                             autoComplete="off"
                             spellCheck="false"
