@@ -32,32 +32,30 @@ class AuthService {
                 return ['success' => false, 'message' => 'Username or email already exists'];
             }
             
-            // Store password as plain text (NOT RECOMMENDED for production)
-            // $passwordHash = hashPassword($password);
+            // Store password as plain text (as requested)
             
             // Insert new user
             $stmt = $conn->prepare("
-                INSERT INTO users (username, email, password, full_name, first_name, last_name, phone) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO users (username, email, password, full_name, first_name, last_name, phone, is_active, login_count, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, NOW(), NOW())
             ");
             $stmt->execute([$username, $email, $password, $fullName, $firstName, $lastName, $phone]);
             
             $userId = $conn->lastInsertId();
             
-            // Get created user
-            $stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
+            // Get created user (without password)
+            $stmt = $conn->prepare("
+                SELECT id, username, email, full_name, first_name, last_name, phone, created_at 
+                FROM users WHERE id = ?
+            ");
             $stmt->execute([$userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            // Create user session
-            $sessionData = $this->createUserSession($userId);
             
             return [
                 'success' => true,
                 'message' => 'User registered successfully',
                 'data' => [
-                    'user' => $user,
-                    'session' => $sessionData
+                    'user' => $user
                 ]
             ];
             
@@ -99,15 +97,14 @@ class AuthService {
             $stmt = $conn->prepare("UPDATE users SET last_login = NOW(), login_count = login_count + 1 WHERE id = ?");
             $stmt->execute([$user['id']]);
             
-            // Create user session
-            $sessionData = $this->createUserSession($user['id']);
+            // Remove password from response
+            unset($user['password']);
             
             return [
                 'success' => true,
                 'message' => 'Login successful',
                 'data' => [
-                    'user' => $user,
-                    'session' => $sessionData
+                    'user' => $user
                 ]
             ];
             

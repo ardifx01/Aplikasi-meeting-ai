@@ -143,27 +143,49 @@ class MeetingRoom {
      */
     public function createRoom($data) {
         try {
-            $query = "INSERT INTO " . $this->table_name . "
-                    (name, floor, capacity, address, facilities, image_url)
-                    VALUES (:name, :floor, :capacity, :address, :facilities, :image_url)";
+            // Convert facilities array to JSON string if it's an array
+            $facilities = $data['facilities'];
+            if (is_array($facilities)) {
+                $facilities = json_encode($facilities);
+            } else if (is_string($facilities)) {
+                // If it's a string, keep it as is
+                $facilities = $facilities;
+            } else {
+                $facilities = '';
+            }
+
+            error_log("Create room - Data: " . json_encode($data));
+            error_log("Create room - Facilities: " . $facilities);
+
+            $query = "INSERT INTO " . $this->table_name . " 
+                     (room_name, floor, capacity, building, features, image_url, is_available, is_maintenance, created_at, updated_at)
+                     VALUES (:name, '-', :capacity, :address, :facilities, :image_url, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)";
+
+            error_log("Create room - Query: " . $query);
 
             $stmt = $this->conn->prepare($query);
 
             // Bind parameters
+            $imageUrl = $data['image_url'] ?? '/images/meeting-rooms/default-room.jpg';
             $stmt->bindParam(":name", $data['name']);
-            $stmt->bindParam(":floor", $data['floor']);
             $stmt->bindParam(":capacity", $data['capacity']);
             $stmt->bindParam(":address", $data['address']);
-            $stmt->bindParam(":facilities", $data['facilities']);
-            $stmt->bindParam(":image_url", $data['image_url'] ?? null);
+            $stmt->bindParam(":facilities", $facilities);
+            $stmt->bindParam(":image_url", $imageUrl);
 
-            if ($stmt->execute()) {
-                $roomId = $this->conn->lastInsertId();
-                return $this->getRoomById($roomId);
+            $result = $stmt->execute();
+            error_log("Create room - Execute result: " . ($result ? 'true' : 'false'));
+            
+            if ($result) {
+                $newRoomId = $this->conn->lastInsertId();
+                $newRoom = $this->getRoomById($newRoomId);
+                error_log("Create room - New room: " . json_encode($newRoom));
+                return $newRoom;
             }
             return false;
         } catch (PDOException $e) {
             error_log("Error creating room: " . $e->getMessage());
+            error_log("Error creating room - Stack trace: " . $e->getTraceAsString());
             return false;
         }
     }
@@ -173,29 +195,47 @@ class MeetingRoom {
      */
     public function updateRoom($data) {
         try {
+            // Convert facilities array to JSON string if it's an array
+            $facilities = $data['facilities'];
+            if (is_array($facilities)) {
+                $facilities = json_encode($facilities);
+            }
+
+            error_log("Update room - Data: " . json_encode($data));
+            error_log("Update room - Facilities: " . $facilities);
+
             $query = "UPDATE " . $this->table_name . "
-                    SET name = :name, floor = :floor, capacity = :capacity,
-                        address = :address, facilities = :facilities, 
+                    SET room_name = :name, floor = :floor, capacity = :capacity,
+                        building = :address, features = :facilities, 
                         image_url = :image_url, updated_at = CURRENT_TIMESTAMP
                     WHERE id = :id";
+
+            error_log("Update room - Query: " . $query);
 
             $stmt = $this->conn->prepare($query);
 
             // Bind parameters
+            $imageUrl = $data['image_url'] ?? null;
             $stmt->bindParam(":id", $data['id']);
             $stmt->bindParam(":name", $data['name']);
             $stmt->bindParam(":floor", $data['floor']);
             $stmt->bindParam(":capacity", $data['capacity']);
             $stmt->bindParam(":address", $data['address']);
-            $stmt->bindParam(":facilities", $data['facilities']);
-            $stmt->bindParam(":image_url", $data['image_url'] ?? null);
+            $stmt->bindParam(":facilities", $facilities);
+            $stmt->bindParam(":image_url", $imageUrl);
 
-            if ($stmt->execute()) {
-                return $this->getRoomById($data['id']);
+            $result = $stmt->execute();
+            error_log("Update room - Execute result: " . ($result ? 'true' : 'false'));
+            
+            if ($result) {
+                $updatedRoom = $this->getRoomById($data['id']);
+                error_log("Update room - Updated room: " . json_encode($updatedRoom));
+                return $updatedRoom;
             }
             return false;
         } catch (PDOException $e) {
             error_log("Error updating room: " . $e->getMessage());
+            error_log("Error updating room - Stack trace: " . $e->getTraceAsString());
             return false;
         }
     }
@@ -206,7 +246,7 @@ class MeetingRoom {
     public function deleteRoom($id) {
         try {
             $query = "UPDATE " . $this->table_name . " 
-                     SET is_active = false, updated_at = CURRENT_TIMESTAMP 
+                     SET is_available = 0, updated_at = CURRENT_TIMESTAMP 
                      WHERE id = :id";
             
             $stmt = $this->conn->prepare($query);
@@ -337,5 +377,6 @@ class MeetingRoom {
             return [];
         }
     }
+
 }
 ?>

@@ -6,19 +6,19 @@
 // Base API URL: use explicit backend host during npm dev; use same-origin in production
 export const API_BASE_URL = process.env.NODE_ENV === 'production'
     ? `${(typeof window !== 'undefined' ? window.location.origin : '')}/backend/api`
-    : 'http://127.0.0.1:8080/backend/api';
+    : 'http://localhost:8080/backend/api';
 
 // Separate base for Auth endpoints (lives under /api, not /backend/api)
 export const AUTH_API_BASE_URL = process.env.NODE_ENV === 'production'
     ? `${(typeof window !== 'undefined' ? window.location.origin : '')}/api`
-    : 'http://127.0.0.1:8080/api';
+    : 'http://localhost:8080/api';
 
 // API Endpoints
 export const API_ENDPOINTS = {
     // Authentication
     AUTH: {
         LOGIN: `${AUTH_API_BASE_URL}/auth/login.php`,
-        REGISTER: `${AUTH_API_BASE_URL}/auth/login.php`,
+        REGISTER: `${AUTH_API_BASE_URL}/auth/register.php`,
         LOGOUT: `${AUTH_API_BASE_URL}/auth/session.php`,
         GET_USER_BY_SESSION_TOKEN: `${AUTH_API_BASE_URL}/auth/session.php`,
     },
@@ -39,7 +39,7 @@ export const API_ENDPOINTS = {
             return url;
         },
         CREATE: `${API_BASE_URL}/bookings.php/rooms`,
-        UPDATE: `${API_BASE_URL}/bookings.php/rooms`,
+        UPDATE: `${API_BASE_URL}/bookings.php`,
         DELETE: `${API_BASE_URL}/bookings.php/rooms`,
     },
     
@@ -48,6 +48,8 @@ export const API_ENDPOINTS = {
         GET_BY_ID: (id: number) => `${API_BASE_URL}/bookings.php/${id}`,
         GET_USER_RESERVATIONS: (userId: number) => 
             `${API_BASE_URL}/bookings.php/user?user_id=${userId}`,
+        GET_ROOM_BOOKINGS: (roomId: number, date?: string) => 
+            `${API_BASE_URL}/bookings.php/room-bookings?room_id=${roomId}${date ? `&date=${date}` : ''}`,
         GET_ROOM_RESERVATIONS: (roomId: number, date?: string) => {
             let url = `${API_BASE_URL}/bookings.php?room_id=${roomId}`;
             if (date) url += `&date=${date}`;
@@ -140,6 +142,20 @@ export class ApiService {
         return response;
     }
 
+    // Register method
+    static async register(username: string, email: string, password: string, fullName: string) {
+        return this.makeRequest(API_ENDPOINTS.AUTH.REGISTER, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'register',
+                username, 
+                email, 
+                password, 
+                full_name: fullName 
+            })
+        });
+    }
+
     // get user_id from session_token
     static async getUserBySessionToken(sessionToken: string) {
         if (!sessionToken) {
@@ -154,12 +170,7 @@ export class ApiService {
         return userId;
     }
 
-    static async register(username: string, email: string, password: string, fullName: string) {
-        return this.makeRequest(API_ENDPOINTS.AUTH.REGISTER, {
-            method: 'POST',
-            body: JSON.stringify({ username, email, password, full_name: fullName })
-        });
-    }
+
 
     static async logout(sessionToken: string) {
         return this.makeRequest(API_ENDPOINTS.AUTH.LOGOUT, {
@@ -198,6 +209,26 @@ export class ApiService {
         return this.makeRequest(API_ENDPOINTS.ROOMS.SEARCH(searchTerm, capacityMin, capacityMax, roomType));
     }
 
+    static async createRoom(roomData: any) {
+        return this.makeRequest(API_ENDPOINTS.ROOMS.CREATE, {
+            method: 'POST',
+            body: JSON.stringify(roomData)
+        });
+    }
+
+    static async updateRoom(roomData: any) {
+        return this.makeRequest(API_ENDPOINTS.ROOMS.UPDATE, {
+            method: 'PUT',
+            body: JSON.stringify(roomData)
+        });
+    }
+
+    static async deleteRoom(roomId: number) {
+        return this.makeRequest(`${API_ENDPOINTS.ROOMS.DELETE}?id=${roomId}`, {
+            method: 'DELETE'
+        });
+    }
+
     // Reservations/Bookings methods
     static async getAllBookings() {
         return this.makeRequest(API_ENDPOINTS.RESERVATIONS.GET_UPCOMING());
@@ -209,6 +240,14 @@ export class ApiService {
 
     static async getUserBookings(userId: number) {
         return this.makeRequest(API_ENDPOINTS.RESERVATIONS.GET_USER_RESERVATIONS(userId));
+    }
+
+    static async getAIBookingsByUserId(userId: number) {
+        return this.makeRequest(`${API_BASE_URL}/bookings.php/ai-success?user_id=${userId}`);
+    }
+
+    static async getRoomBookings(roomId: number, date?: string) {
+        return this.makeRequest(API_ENDPOINTS.RESERVATIONS.GET_ROOM_BOOKINGS(roomId, date));
     }
 
     static async createBooking(bookingData: any) {
@@ -225,6 +264,29 @@ export class ApiService {
         });
     }
 
+    static async createFormBooking(bookingData: any) {
+        return this.makeRequest(`${API_BASE_URL}/bookings.php/form-booking`, {
+            method: 'POST',
+            body: JSON.stringify(bookingData)
+        });
+    }
+
+    static async saveSuccessfulAIBooking(bookingData: any) {
+        return this.makeRequest(`${API_BASE_URL}/bookings.php/ai-booking-success`, {
+            method: 'POST',
+            body: JSON.stringify(bookingData)
+        });
+    }
+
+    static async createAISuccessBooking(bookingData: any) {
+        return this.makeRequest(`${API_BASE_URL}/bookings.php/ai-booking-success`, {
+            method: 'POST',
+            body: JSON.stringify(bookingData)
+        });
+    }
+
+
+
     static async updateBooking(id: number, bookingData: any) {
         return this.makeRequest(API_ENDPOINTS.RESERVATIONS.UPDATE, {
             method: 'PUT',
@@ -232,10 +294,43 @@ export class ApiService {
         });
     }
 
-    static async cancelBooking(id: number) {
-        return this.makeRequest(API_ENDPOINTS.RESERVATIONS.CANCEL(id), {
-            method: 'DELETE'
-        });
+    static async cancelBooking(id: number | string) {
+        // Check if this is an AI booking
+        const isAiBooking = String(id).startsWith('ai_');
+        
+        if (isAiBooking) {
+            // For AI bookings, use AI-specific endpoint
+            const aiId = String(id).replace('ai_', '');
+            return this.makeRequest(`${API_BASE_URL}/bookings.php/ai-cancel?id=${aiId}`, {
+                method: 'DELETE'
+            });
+        } else {
+            // For form bookings, use regular endpoint
+            return this.makeRequest(API_ENDPOINTS.RESERVATIONS.CANCEL(Number(id)), {
+                method: 'DELETE'
+            });
+        }
+    }
+
+    // Graceful Mongo AI bookings helpers (optional backend)
+    static async getUserAIBookingsMongo(userId: number) {
+        const url = `${API_BASE_URL}/bookings.php/ai-user?user_id=${userId}`;
+        try {
+            return await this.makeRequest(url);
+        } catch (e) {
+            // Fallback aman bila endpoint tidak tersedia
+            return { status: 'error', data: [] } as any;
+        }
+    }
+
+    static async cancelAIBookingMongo(id: string) {
+        const url = `${API_BASE_URL}/bookings.php/ai-booking-mongo/${id}`;
+        try {
+            return await this.makeRequest(url, { method: 'DELETE' });
+        } catch (e) {
+            // Fallback aman bila endpoint tidak tersedia
+            return { status: 'error' } as any;
+        }
     }
 
     // AI Conversations

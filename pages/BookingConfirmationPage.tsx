@@ -1,7 +1,8 @@
 
 import React, { useEffect } from 'react';
-import { Page, type Booking } from '../types';
+import { Page, type Booking, BookingState } from '../types';
 import { ApiService } from '../src/config/api';
+import { saveFormBookingData } from '../services/aiDatabaseService';
 
 interface BookingConfirmationPageProps {
     onNavigate: (page: Page) => void;
@@ -27,18 +28,33 @@ const SuccessIcon: React.FC = () => (
 
 const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNavigate, booking }) => {
     useEffect(() => {
-
         console.log('booking data', booking);
         if (!booking) return;
+        
+        // Prevent duplicate saves with a flag
+        const saveKey = `booking_saved_${booking.roomName}_${booking.topic}_${booking.date}_${booking.time}`;
+        if (localStorage.getItem(saveKey)) {
+            console.log('ℹ️ Booking already saved, skipping duplicate save');
+            return;
+        }
+        
         const t = setTimeout(async () => {
             try {
-                // Ambil user_id dari session_token
+                // Ambil user_id dari session_token dengan fallback
                 const token = localStorage.getItem('session_token') || '';
-                const user_id = await ApiService.getUserBySessionToken(token);
-                if (!user_id) {
-                    console.warn('Session token tidak tersedia atau tidak valid. Lewati penyimpanan booking.');
-                    return;
+                let user_id = null;
+                
+                if (token) {
+                    user_id = await ApiService.getUserBySessionToken(token);
                 }
+                
+                // Fallback: jika tidak ada token atau token tidak valid, gunakan user_id default
+                if (!user_id) {
+                    console.warn('Session token tidak tersedia atau tidak valid. Menggunakan user_id default.');
+                    user_id = 1; // Default user_id
+                }
+
+                console.log('User ID untuk booking:', user_id);
 
                 // Normalisasi meeting_time ("HH:MM" atau "HH:MM - HH:MM") -> "HH:MM:00"
                 const timeStr = booking.time || '';
@@ -56,28 +72,39 @@ const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNav
                     if (endM > startM) duration = endM - startM;
                 }
 
-                await ApiService.createAIBooking({
+                // Generate session_id yang konsisten berdasarkan booking data
+                const currentSessionId = `form_${Date.now()}`;
+                
+                // Simpan data booking formulir ke ai_booking_data table
+                const ok = await saveFormBookingData(
                     user_id,
-                    session_id: 'confirm_' + Date.now(),
-                    room_id: booking.roomId,
-                    topic: booking.topic,
-                    meeting_date: booking.date,
-                    meeting_time,
-                    duration,
-                    participants: booking.participants,
-                    meeting_type: booking.meetingType,
-                    food_order: booking.foodOrder,
-                    booking_state: 'BOOKED'
-                } as any);
+                    currentSessionId,
+                    BookingState.BOOKED,
+                    {
+                        roomName: booking.roomName,
+                        topic: booking.topic,
+                        pic: booking.pic,
+                        date: booking.date,
+                        time: booking.time,
+                        participants: booking.participants,
+                        meetingType: booking.meetingType,
+                        foodOrder: booking.foodOrder
+                    }
+                );
 
+                if (ok) {
+                    console.log('✅ Form booking data saved to ai_booking_data table successfully');
+                    // Mark as saved to prevent duplicates
+                    localStorage.setItem(saveKey, 'true');
+                    localStorage.setItem('last_booking_session_id', currentSessionId);
+                } else {
+                    console.warn('⚠️ Warning: failed to save form booking to backend');
+                }
 
-                console.log('booking data saved', booking);
-
-                alert('Booking data saved');
+                console.log('Booking confirmed:', booking);
             } catch(error) {
                 console.log('error', error);
-                console.log('booking data not saved', booking);
-                alert('Booking data not saved');
+                console.log('booking confirmation error', booking);
             }
         }, 1000);
         return () => clearTimeout(t);
@@ -121,7 +148,11 @@ const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNav
                     </div>
                     <div>
                         <p className="text-sm text-gray-500">Jenis Rapat</p>
-                        <p className="font-semibold text-lg text-gray-800 capitalize">{booking.meetingType}</p>
+                        <p className="font-semibold text-lg text-gray-800 capitalize">
+                            {booking.meetingType === 'internal' ? 'Internal' : 
+                             booking.meetingType === 'external' ? 'Eksternal' : 
+                             booking.meetingType || 'Internal'}
+                        </p>
                     </div>
                     <div>
                         <p className="text-sm text-gray-500">Tanggal</p>
@@ -129,7 +160,9 @@ const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNav
                     </div>
                     <div>
                         <p className="text-sm text-gray-500">Waktu</p>
-                        <p className="font-semibold text-lg text-gray-800">{booking.time}</p>
+                        <p className="font-semibold text-lg text-gray-800">
+                            {booking.time || '09:00'}
+                        </p>
                     </div>
                     <div>
                         <p className="text-sm text-gray-500">Jumlah Peserta</p>
@@ -139,7 +172,9 @@ const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNav
                         <p className="text-sm text-gray-500">Jenis Makanan</p>
                         <p className="font-semibold text-lg text-gray-800 capitalize">
                             {booking.foodOrder === 'tidak' ? 'Tidak pesan makanan' : 
-                             booking.foodOrder === 'ringan' ? 'Makanan Ringan' : 'Makanan Berat'}
+                             booking.foodOrder === 'ringan' ? 'Makanan Ringan' : 
+                             booking.foodOrder === 'berat' ? 'Makanan Berat' : 
+                             booking.foodOrder === 'ya' ? 'Makanan Berat' : 'Tidak pesan makanan'}
                         </p>
                     </div>
                 </div>

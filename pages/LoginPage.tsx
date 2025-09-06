@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { MailIcon, LockIcon, EyeIcon, EyeOffIcon, GoogleIcon, FacebookIcon } from '../components/icons';
 import { User } from '../types';
+import WorkingPersonIllustration from '../components/WorkingPersonIllustration';
+import { useDarkMode } from '../contexts/DarkModeContext';
 
 interface LoginPageProps {
     onLogin: (user: User) => void;
@@ -11,6 +13,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToRegister }) 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const { isDarkMode } = useDarkMode();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -18,6 +21,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToRegister }) 
             // Simulate login success for demo purposes
             // In real app, this would call the actual API
             const userData = {
+                id: 1, // Use user ID 1 for demo (where AI bookings exist)
                 username: email.split('@')[0], // Use email prefix as username
                 full_name: email.split('@')[0], // Use email prefix as full name
                 email: email,
@@ -41,7 +45,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToRegister }) 
     };
 
     return (
-        <div className="min-h-screen w-full bg-gradient-to-b from-cyan-400 via-sky-200 to-cyan-400 flex justify-center items-center font-['Poppins'] p-4">
+        <div className={`min-h-screen w-full ${isDarkMode ? 'bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-b from-cyan-400 via-sky-200 to-cyan-400'} flex justify-center items-center font-['Poppins'] p-4`}>
             <div className="container mx-auto max-w-screen-2xl max-h-[1024px] h-full flex w-full">
                 {/* Left Panel */}
                 <div className="hidden md:flex w-[55%] relative flex-col justify-between items-center p-10 text-white">
@@ -50,29 +54,29 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToRegister }) 
                         <img src="/images/logoIAC.png" alt="IAC Logo" className="w-[220px] h-auto object-contain" />
                     </div>
                      {/* Illustration with person sitting */}
-                    <img src="/images/logo orang duduk.png" alt="Person sitting illustration" className="max-w-[80%] my-5" />
+                    <WorkingPersonIllustration />
                     <div className="w-full h-20"></div> {/* Spacer */}
                 </div>
 
                 {/* Right Panel */}
                 <div className="w-full md:w-[45%] flex justify-center items-center p-4">
-                    <div className="w-full max-w-md bg-white rounded-xl shadow-2xl p-8 sm:p-12 text-center">
-                        <h1 className="text-3xl font-medium text-gray-800">Welcome to <span className="text-cyan-500 font-semibold">Spacio</span></h1>
+                    <div className={`w-full max-w-md ${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-2xl p-8 sm:p-12 text-center`}>
+                        <h1 className={`text-3xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Welcome to <span className="text-cyan-500 font-semibold">Spacio</span></h1>
                         <h2 className="text-2xl font-medium text-cyan-500 uppercase tracking-wider mt-2 mb-8">USER LOGIN</h2>
                         
                         <div className="space-y-4">
-                            <button className="w-full flex items-center justify-center gap-2.5 py-3 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition font-medium text-gray-600">
+                            <button className={`w-full flex items-center justify-center gap-2.5 py-3 border ${isDarkMode ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'} rounded-lg shadow-sm transition font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                                 <GoogleIcon /> Login with Google
                             </button>
-                            <button className="w-full flex items-center justify-center gap-2.5 py-3 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition font-medium text-gray-600">
+                            <button className={`w-full flex items-center justify-center gap-2.5 py-3 border ${isDarkMode ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'} rounded-lg shadow-sm transition font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                                 <FacebookIcon /> Login with Facebook
                             </button>
                         </div>
 
                         <div className="my-6 flex items-center">
-                            <hr className="flex-grow border-gray-300" />
-                            <span className="mx-4 text-gray-400 font-semibold text-xs">OR</span>
-                            <hr className="flex-grow border-gray-300" />
+                            <hr className={`flex-grow ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`} />
+                            <span className={`mx-4 font-semibold text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-400'}`}>OR</span>
+                            <hr className={`flex-grow ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`} />
                         </div>
 
                         <form onSubmit={handleLogin} className="text-left">
@@ -111,7 +115,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToRegister }) 
                                 </button>
                             </div>
                             
-                            <div className="flex justify-between items-center text-sm mb-6 text-gray-600">
+                            <div className={`flex justify-between items-center text-sm mb-6 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                                 <label className="flex items-center gap-2 cursor-pointer select-none">
                                     <input type="checkbox" className="accent-cyan-500 h-4 w-4 rounded border-gray-300 focus:ring-cyan-500 text-cyan-500" />
                                     <span>Remember me</span>
@@ -124,7 +128,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToRegister }) 
                             </button>
                         </form>
 
-                        <p className="mt-8 text-sm text-gray-600">
+                        <p className={`mt-8 text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                             Don't have an account? <button onClick={onNavigateToRegister} className="font-medium text-cyan-500 hover:underline">Register</button>
                         </p>
                     </div>

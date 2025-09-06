@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MailIcon, LockIcon, EyeIcon, EyeOffIcon, UserIcon } from '../components/icons';
-import { ApiService } from '@/src/config/api';
+import { ApiService } from '../src/config/api';
+import WorkingPersonIllustration from '../components/WorkingPersonIllustration';
 
 interface RegisterPageProps {
     onNavigateToLogin: () => void;
@@ -52,7 +53,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigateToLogin }) => {
                         <img src="/images/logoIAC.png" alt="IAC Logo" className="w-[220px] h-auto object-contain" />
                     </div>
                      {/* Illustration with person sitting */}
-                    <img src="/images/logo orang duduk.png" alt="Person sitting illustration" className="max-w-[80%] my-5" />
+                    <WorkingPersonIllustration />
                     <div className="w-full h-20"></div> {/* Spacer */}
                 </div>
 
@@ -113,7 +114,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigateToLogin }) => {
                                     {showPassword ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                                 </button>
                             </div>
-
+                            
                             <div className="relative mb-4 bg-cyan-500 rounded-lg px-5 py-2.5 flex items-center">
                                 <LockIcon className="w-6 h-6 text-white mr-4" />
                                 <div className="w-full">

@@ -66,8 +66,8 @@ export class BackendService {
                 bookingData.booking_state = 'BOOKED';
             }
 
-            // Use MongoDB endpoint for AI bookings
-            const result = await ApiService.createAIBookingMongo(bookingData);
+            // Use AI booking endpoint
+            const result = await ApiService.createAIBooking(bookingData);
             console.log('AI booking created successfully in MongoDB:', result);
 
             return result;
@@ -94,6 +94,22 @@ export class BackendService {
             return result;
         } catch (error) {
             console.error('Error creating form booking:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Save successful AI booking to ai_bookings_success table
+     */
+    static async saveSuccessfulAIBooking(bookingData: any) {
+        try {
+            console.log('Saving successful AI booking:', bookingData);
+            
+            const result = await ApiService.saveSuccessfulAIBooking(bookingData);
+            console.log('Successful AI booking saved:', result);
+            return result;
+        } catch (error) {
+            console.error('Error saving successful AI booking:', error);
             throw error;
         }
     }

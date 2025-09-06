@@ -18,15 +18,31 @@ const displayValue = (value: unknown, placeholder: string = 'belum diisi') => {
 
 // Helper: build confirmation summary safely
 const buildConfirmationSummary = (data: Partial<Booking>) => {
+  // Format meeting type untuk display
+  const formatMeetingType = (type: string) => {
+    if (type === 'internal') return 'Internal';
+    if (type === 'external') return 'Eksternal';
+    return type;
+  };
+
+  // Format food order untuk display
+  const formatFoodOrder = (food: string) => {
+    if (food === 'tidak') return 'Tidak pesan makanan';
+    if (food === 'ringan') return 'Makanan Ringan';
+    if (food === 'berat') return 'Makanan Berat';
+    if (food === 'ya') return 'Makanan Berat'; // Fallback untuk 'ya'
+    return food;
+  };
+
   return `Sempurna! Mari saya konfirmasi detail pemesanan Anda:\n\n`
     + `🏢 **Ruangan:** ${displayValue(data.roomName)}\n`
     + `📋 **Topik:** ${displayValue(data.topic)}\n`
     + `👤 **PIC:** ${displayValue(data.pic)}\n`
     + `👥 **Peserta:** ${displayValue(data.participants)} orang\n`
     + `📅 **Tanggal:** ${displayValue(data.date)}\n`
-    + `⏰ **Waktu:** ${displayValue(data.time)}\n`
-    + `🤝 **Jenis:** ${displayValue(data.meetingType)}\n`
-    + `🍽️ **Makanan:** ${displayValue(data.foodOrder)}\n\n`
+    + `⏰ **Waktu:** ${displayValue(data.time, '09:00')}\n`
+    + `🤝 **Jenis:** ${formatMeetingType(displayValue(data.meetingType, 'Internal'))}\n`
+    + `🍽️ **Makanan:** ${formatFoodOrder(displayValue(data.foodOrder))}\n\n`
     + `Apakah semua informasi sudah benar?`;
 };
 
@@ -190,6 +206,7 @@ export const processBookingConversation = async (
 
   // Global "start over" check for "batal" or "stop"
   if (lowerCaseMessage.includes('batal') || lowerCaseMessage.includes('stop') || lowerCaseMessage.includes('mulai ulang')) {
+    console.log(`🔍 Global intercept: cancel/stop detected`);
     newState = BookingState.IDLE;
     responseText = "Baik, pemesanan dibatalkan. Ada lagi yang bisa saya bantu?";
     updatedBookingData = {};
@@ -204,6 +221,7 @@ export const processBookingConversation = async (
     lowerCaseMessage.includes('ubah jam') ||
     lowerCaseMessage.includes('ganti jam')
   ) {
+    console.log(`🔍 Global intercept: change time detected`);
     newState = BookingState.ASKING_TIME;
     // clear previous time to force re-ask
     if (updatedBookingData.time) delete (updatedBookingData as any).time;
@@ -221,7 +239,37 @@ export const processBookingConversation = async (
   const isBookingComplete = !!(updatedBookingData.roomName && updatedBookingData.topic && updatedBookingData.pic &&
     updatedBookingData.participants && updatedBookingData.date && updatedBookingData.time &&
     updatedBookingData.meetingType && updatedBookingData.foodOrder);
-  if (isBookingComplete && (/(^|\b)(ya|benar|konfirm|konfirmasi)(\b|$)/i.test(lowerCaseMessage))) {
+  
+  console.log(`🔍 Global intercept check: isBookingComplete=${isBookingComplete}, state=${state}`);
+  console.log(`🔍 Booking data:`, updatedBookingData);
+  console.log(`🔍 Input message: "${message}"`);
+  console.log(`🔍 Lower case message: "${lowerCaseMessage}"`);
+  
+  // Pastikan tidak ada intercept yang salah untuk input makanan
+  if (state === BookingState.ASKING_FOOD_TYPE) {
+    console.log(`🔍 In ASKING_FOOD_TYPE state, skipping global intercepts`);
+    // Skip global intercepts when in ASKING_FOOD_TYPE state
+    // Lanjut ke switch statement untuk memproses input makanan
+  }
+  
+  // Pastikan tidak ada intercept yang salah untuk meeting type
+  if (state === BookingState.ASKING_MEETING_TYPE) {
+    console.log(`🔍 In ASKING_MEETING_TYPE state, skipping global intercepts`);
+    // Skip global intercepts when in ASKING_MEETING_TYPE state
+    // Lanjut ke switch statement untuk memproses input meeting type
+  }
+  
+  // Pastikan tidak ada intercept yang salah untuk input waktu
+  if (state === BookingState.ASKING_TIME) {
+    console.log(`🔍 In ASKING_TIME state, skipping global intercepts`);
+    // Skip global intercepts when in ASKING_TIME state
+    // Lanjut ke switch statement untuk memproses input waktu
+  }
+  
+  // Hanya jalankan quick confirm jika user benar-benar ingin konfirmasi
+  // Dan hanya jika state sudah CONFIRMING dan user mengetik konfirmasi
+  if (isBookingComplete && state === BookingState.CONFIRMING && 
+      (/(^|\b)(ya|benar|konfirm|konfirmasi)(\b|$)/i.test(lowerCaseMessage))) {
     finalBooking = {
       id: Date.now(),
       roomName: updatedBookingData.roomName!,
@@ -238,7 +286,9 @@ export const processBookingConversation = async (
     quickActions = undefined;
     return { responseText, newState, updatedBookingData, finalBooking, quickActions };
   }
-  if (isBookingComplete && (/(^|\b)(tidak|batal)(\b|$)/i.test(lowerCaseMessage))) {
+  // Hanya jalankan cancel jika user benar-benar ingin membatalkan
+  // Dan hanya jika state sudah CONFIRMING atau user mengetik "batal" secara eksplisit
+  if (state === BookingState.CONFIRMING && (/(^|\b)(tidak|batal)(\b|$)/i.test(lowerCaseMessage))) {
     newState = BookingState.IDLE;
     responseText = "Baik, pemesanan dibatalkan. Ada lagi yang bisa saya bantu?";
     updatedBookingData = {};
@@ -504,51 +554,53 @@ export const processBookingConversation = async (
       break;
 
     case BookingState.ASKING_TIME:
-      // Intercept: if user already clicks meeting type buttons while state is still ASKING_TIME
-      if (/(^|\b)(internal|in-house|tim|team)(\b|$)/i.test(lowerCaseMessage)) {
-        updatedBookingData.meetingType = "internal";
-        newState = BookingState.ASKING_FOOD_TYPE;
-        responseText = `Baik, jenis rapatnya internal. Apakah perlu memesan makanan? 🍽️`;
-        quickActions = getFoodQuickActions();
+      console.log(`🔍 Time parsing: input="${message}", lowerCase="${lowerCaseMessage}"`);
+      console.log(`🔍 Current state: ASKING_TIME`);
+      console.log(`🔍 Current booking data:`, updatedBookingData);
+      
+      // Cek apakah input adalah meeting type (yang seharusnya tidak terjadi di state ini)
+      if (lowerCaseMessage === 'internal' || lowerCaseMessage === 'eksternal' || lowerCaseMessage === 'external') {
+        console.log(`❌ Meeting type input detected in ASKING_TIME state: ${message}`);
+        console.log(`❌ This should not happen! User should be providing time, not meeting type.`);
+        responseText = "Mohon pilih waktu yang valid. Format yang didukung misalnya: 09:00, 10.30, jam 9, pukul 14, 2 siang.";
+        quickActions = [
+          { label: '09:00', actionValue: '09:00' },
+          { label: '10:00', actionValue: '10:00' },
+          { label: '13:00', actionValue: '13:00' },
+          { label: '15:00', actionValue: '15:00' },
+        ];
         break;
       }
-      if (/(^|\b)(eksternal|external|client|klien|customer)(\b|$)/i.test(lowerCaseMessage)) {
-        updatedBookingData.meetingType = "external";
-        newState = BookingState.ASKING_FOOD_TYPE;
-        responseText = `Baik, jenis rapatnya eksternal. Apakah perlu memesan makanan? 🍽️`;
-        quickActions = getFoodQuickActions();
-        break;
-      }
-
-      // Intercept: user already clicks food quick buttons while state still ASKING_TIME
-      if (lowerCaseMessage.includes('tidak') || lowerCaseMessage.includes('ringan') || lowerCaseMessage.includes('berat')) {
-        if (lowerCaseMessage.includes('tidak')) {
-          updatedBookingData.foodOrder = 'tidak';
-        } else if (lowerCaseMessage.includes('ringan')) {
-          updatedBookingData.foodOrder = 'ringan';
-        } else {
-          updatedBookingData.foodOrder = 'berat';
-        }
-
-        newState = BookingState.CONFIRMING;
-        responseText = buildConfirmationSummary(updatedBookingData);
-        quickActions = undefined;
-        break;
-      }
-
+      
       // Parse and validate time: allow start between 09:00 and 17:00
       const parsedTime = parseTimeInput(message);
+      console.log(`🔍 Parsed time: "${parsedTime}"`);
+      
       const timeMatch = parsedTime.match(/^(\d{1,2}):([0-5]\d)$/);
       if (!timeMatch) {
+        console.log(`❌ Invalid time input: ${message}`);
         responseText = "Mohon pilih waktu yang valid. Format yang didukung misalnya: 09:00, 10.30, jam 9, pukul 14, 2 siang.";
-        quickActions = undefined;
+        quickActions = [
+          { label: '09:00', actionValue: '09:00' },
+          { label: '10:00', actionValue: '10:00' },
+          { label: '13:00', actionValue: '13:00' },
+          { label: '15:00', actionValue: '15:00' },
+        ];
       } else {
         const hour = parseInt(timeMatch[1]);
         if (hour < 9 || hour > 17) {
+          console.log(`❌ Time out of range: ${hour}:${timeMatch[2]}`);
           responseText = "Jam rapat hanya dapat dimulai antara 09:00 hingga 17:00.";
-          quickActions = undefined;
+          quickActions = [
+            { label: '09:00', actionValue: '09:00' },
+            { label: '10:00', actionValue: '10:00' },
+            { label: '13:00', actionValue: '13:00' },
+            { label: '15:00', actionValue: '15:00' },
+          ];
         } else {
           updatedBookingData.time = parsedTime;
+          console.log(`✅ Time set to: ${parsedTime}`);
+          console.log('🔄 Transitioning to ASKING_MEETING_TYPE state');
           newState = BookingState.ASKING_MEETING_TYPE;
           responseText = `Bagus! Waktu rapat: **"${parsedTime}"** ⏰\n\nApa jenis rapatnya? 🤝`;
           quickActions = [
@@ -559,23 +611,56 @@ export const processBookingConversation = async (
       }
       break;
 
+
     // ===============================
     // PERBAIKAN: ASKING_MEETING_TYPE
     // ===============================
     case BookingState.ASKING_MEETING_TYPE:
       {
         const lowerCaseMessage = message.toLowerCase();
-        if (lowerCaseMessage.match(/internal|in-house|tim|team/)) {
+        console.log(`🔍 Meeting type parsing: input="${message}", lowerCase="${lowerCaseMessage}"`);
+        console.log(`🔍 Current state: ASKING_MEETING_TYPE`);
+        console.log(`🔍 Current booking data:`, updatedBookingData);
+        
+        // Cek apakah input adalah waktu (yang seharusnya tidak terjadi di state ini)
+        if (lowerCaseMessage.match(/^\d{1,2}:\d{2}$/) || lowerCaseMessage.match(/^\d{1,2}\.\d{2}$/)) {
+          console.log(`❌ Time input detected in ASKING_MEETING_TYPE state: ${message}`);
+          console.log(`❌ This should not happen! User should be providing meeting type, not time.`);
+          responseText = "Apakah rapat ini internal atau eksternal?";
+          quickActions = [
+            { label: "Internal", actionValue: "internal" },
+            { label: "Eksternal", actionValue: "eksternal" }
+          ];
+          break;
+        }
+        
+        // Cek apakah input adalah meeting type yang valid
+        if (lowerCaseMessage === 'internal' || lowerCaseMessage.match(/^internal$/)) {
           updatedBookingData.meetingType = "internal";
+          console.log(`✅ Meeting type set to: internal`);
           newState = BookingState.ASKING_FOOD_TYPE;
           responseText = `Baik, jenis rapatnya internal. Apakah perlu memesan makanan? 🍽️`;
           quickActions = getFoodQuickActions();
-        } else if (lowerCaseMessage.match(/eksternal|external|client|klien|customer/)) {
+        } else if (lowerCaseMessage === 'eksternal' || lowerCaseMessage === 'external' || lowerCaseMessage.match(/^eksternal$|^external$/)) {
           updatedBookingData.meetingType = "external";
+          console.log(`✅ Meeting type set to: external`);
           newState = BookingState.ASKING_FOOD_TYPE;
           responseText = `Baik, jenis rapatnya eksternal. Apakah perlu memesan makanan? 🍽️`;
           quickActions = getFoodQuickActions();
+        } else if (lowerCaseMessage.match(/client|klien|customer/)) {
+          updatedBookingData.meetingType = "external";
+          console.log(`✅ Meeting type set to: external (from client/klien/customer)`);
+          newState = BookingState.ASKING_FOOD_TYPE;
+          responseText = `Baik, jenis rapatnya eksternal. Apakah perlu memesan makanan? 🍽️`;
+          quickActions = getFoodQuickActions();
+        } else if (lowerCaseMessage.match(/tim|team|in-house/)) {
+          updatedBookingData.meetingType = "internal";
+          console.log(`✅ Meeting type set to: internal (from tim/team/in-house)`);
+          newState = BookingState.ASKING_FOOD_TYPE;
+          responseText = `Baik, jenis rapatnya internal. Apakah perlu memesan makanan? 🍽️`;
+          quickActions = getFoodQuickActions();
         } else {
+          console.log(`❌ Invalid meeting type input: ${message}`);
           responseText = "Apakah rapat ini internal atau eksternal?";
           quickActions = [
             { label: "Internal", actionValue: "internal" },
@@ -586,43 +671,71 @@ export const processBookingConversation = async (
       break;
 
     case BookingState.ASKING_FOOD_TYPE:
-      // Intercept: quick buttons should directly move to confirming
-      if (lowerCaseMessage.includes('tidak') || lowerCaseMessage.includes('ringan') || lowerCaseMessage.includes('berat')) {
-        if (lowerCaseMessage.includes('tidak')) {
-          updatedBookingData.foodOrder = 'tidak';
-        } else if (lowerCaseMessage.includes('ringan')) {
-          updatedBookingData.foodOrder = 'ringan';
-        } else {
-          updatedBookingData.foodOrder = 'berat';
-        }
-        
-        newState = BookingState.CONFIRMING;
-        responseText = buildConfirmationSummary(updatedBookingData);
-        quickActions = [
-          { label: "Ya, konfirmasi", actionValue: "ya" },
-          { label: "Tidak, batal", actionValue: "tidak" }
-        ];
-      } else {
-        responseText = "Mohon pilih jenis makanan yang valid.";
+      console.log(`🔍 Food type parsing: input="${message}", lowerCase="${lowerCaseMessage}"`);
+      console.log(`🔍 Current state: ASKING_FOOD_TYPE`);
+      console.log(`🔍 Current booking data:`, updatedBookingData);
+      
+      // Pastikan kita benar-benar di state ASKING_FOOD_TYPE
+      if (state !== BookingState.ASKING_FOOD_TYPE) {
+        console.log(`❌ Wrong state! Expected: ASKING_FOOD_TYPE, Got: ${state}`);
+        responseText = "Mohon pilih jenis makanan yang valid: tidak, ringan, atau berat.";
         quickActions = getFoodQuickActions();
+        break;
       }
+      
+      // Cek apakah input adalah makanan yang valid
+      if (lowerCaseMessage.includes('tidak')) {
+        updatedBookingData.foodOrder = 'tidak';
+        console.log(`✅ Food order set to: tidak`);
+      } else if (lowerCaseMessage.includes('ringan')) {
+        updatedBookingData.foodOrder = 'ringan';
+        console.log(`✅ Food order set to: ringan`);
+      } else if (lowerCaseMessage.includes('berat')) {
+        updatedBookingData.foodOrder = 'berat';
+        console.log(`✅ Food order set to: berat`);
+      } else {
+        console.log(`❌ Invalid food input: ${message}`);
+        responseText = "Mohon pilih jenis makanan yang valid: tidak, ringan, atau berat.";
+        quickActions = getFoodQuickActions();
+        break;
+      }
+      
+      // Hanya set PIC jika benar-benar kosong
+      if (!updatedBookingData.pic) {
+        updatedBookingData.pic = '-';
+      }
+      
+      console.log('🔍 Final booking data before confirmation:', updatedBookingData);
+      console.log('🔄 Transitioning to CONFIRMING state');
+      
+      newState = BookingState.CONFIRMING;
+      responseText = buildConfirmationSummary(updatedBookingData);
+      quickActions = [
+        { label: "Ya, konfirmasi", actionValue: "ya" },
+        { label: "Tidak, batal", actionValue: "tidak" }
+      ];
       break;
 
     case BookingState.CONFIRMING:
+      console.log(`🔍 Confirming state: input="${message}", lowerCase="${lowerCaseMessage}"`);
+      console.log(`🔍 Current booking data:`, updatedBookingData);
+      
       if (lowerCaseMessage.includes('ya') || lowerCaseMessage.includes('benar') || lowerCaseMessage.includes('konfirm')) {
-        // Create final booking object
+        // Create final booking object using updatedBookingData
         finalBooking = {
           id: Date.now(),
           roomName: updatedBookingData.roomName!,
           roomId: updatedBookingData.roomId!,
           topic: updatedBookingData.topic!,
-          pic: updatedBookingData.pic!,
+          pic: updatedBookingData.pic || '-',
           participants: updatedBookingData.participants!,
           date: updatedBookingData.date!,
           time: updatedBookingData.time!,
           meetingType: updatedBookingData.meetingType!,
-          foodOrder: updatedBookingData.foodOrder!
+          foodOrder: updatedBookingData.foodOrder || 'tidak'
         };
+        
+        console.log('✅ Creating final booking with data:', finalBooking);
         responseText = "🎉 Pemesanan berhasil dikonfirmasi! Terima kasih telah menggunakan layanan Spacio.";
         quickActions = undefined;
       } else if (lowerCaseMessage.includes('tidak') || lowerCaseMessage.includes('batal')) {
@@ -631,8 +744,12 @@ export const processBookingConversation = async (
         updatedBookingData = {};
         quickActions = undefined;
       } else {
-        responseText = "Mohon konfirmasi dengan mengetik 'ya' untuk melanjutkan atau 'tidak' untuk membatalkan.";
-        quickActions = undefined;
+        // Jika user mengetik sesuatu yang tidak jelas, tampilkan konfirmasi lagi
+        responseText = buildConfirmationSummary(updatedBookingData);
+        quickActions = [
+          { label: "Ya, konfirmasi", actionValue: "ya" },
+          { label: "Tidak, batal", actionValue: "tidak" }
+        ];
       }
       break;
 

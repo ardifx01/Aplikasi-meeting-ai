@@ -3,6 +3,9 @@ export enum Page {
   Register,
   Dashboard,
   MeetingRooms,
+  RoomDetail,
+  EditRoom,
+  AddRoom,
   Booking,
   AiAssistant,
   BookingConfirmation,
@@ -49,6 +52,7 @@ export interface Booking {
   pic: string;
   meetingType: 'internal' | 'external';
   foodOrder: 'berat' | 'ringan' | 'tidak';
+  imageUrl?: string;
 }
 
 export enum BookingState {

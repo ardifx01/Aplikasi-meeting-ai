@@ -92,16 +92,16 @@ export const getConversationHistory = async (
 };
 
 /**
- * Save booking data using new backend API
+ * Save booking data from FORM to ai_booking_data table
  */
-export const saveBookingData = async (
+export const saveFormBookingData = async (
   userId: number,
   sessionId: string,
   bookingState: BookingState,
   bookingData: Partial<Booking>
 ): Promise<boolean> => {
   try {
-    console.log('Saving booking data using new backend API:', {
+    console.log('Saving FORM booking data to ai_booking_data table:', {
       userId,
       sessionId,
       bookingState,
@@ -109,7 +109,6 @@ export const saveBookingData = async (
     });
 
     // Convert booking data format to match backend API
-    // Ensure meeting date and time are always provided in expected formats
     const normalizedMeetingTime = bookingData.time
       ? extractStartTime(bookingData.time)
       : '09:00:00';
@@ -125,7 +124,7 @@ export const saveBookingData = async (
       participants: bookingData.participants || 0,
       meeting_type: bookingData.meetingType || 'internal',
       food_order: bookingData.foodOrder || 'tidak',
-      booking_state: String(bookingState) // Convert enum to string
+      pic: bookingData.pic || '-'
     };
 
     // If we have room name, try to get room ID
@@ -143,132 +142,185 @@ export const saveBookingData = async (
       }
     }
 
-    // Optional pre-check availability if room_id available
-    if (backendBookingData.room_id && backendBookingData.meeting_date && backendBookingData.meeting_time) {
+    console.log('📊 Form booking data prepared:', backendBookingData);
+
+    // Save to ai_booking_data table (form bookings)
+    try {
+      const result = await ApiService.createFormBooking(backendBookingData);
+      console.log('✅ Form booking data saved to ai_booking_data table successfully:', result);
+      
+      lastSuggestions = [];
+      return true;
+    } catch (e: any) {
+      console.error('Error creating form booking:', e);
+      
+      // Handle 409 Conflict (room not available)
+      if (e.message && e.message.includes('Room is not available')) {
+        console.log('🔄 Room not available for form booking, generating suggestions');
+        
+        // Generate room suggestions for form booking
+        lastSuggestions = [];
+        try {
+          const roomsResp = await BackendService.getAllRooms();
+          const rooms = roomsResp.data || [];
+          const desiredParticipants = backendBookingData.participants || 1;
+          const filtered = rooms
+            .filter((r: any) => r.id !== backendBookingData.room_id && (!r.capacity || r.capacity >= desiredParticipants))
+            .slice(0, 8);
+          for (const r of filtered) {
+            try {
+              const avail = await BackendService.checkRoomAvailability(
+                r.id,
+                backendBookingData.meeting_date,
+                backendBookingData.meeting_time.substring(0,5),
+                backendBookingData.duration
+              );
+              if (avail?.data?.available !== false) {
+                lastSuggestions.push({ id: r.id, name: r.name });
+                if (lastSuggestions.length >= 3) break;
+              }
+            } catch {}
+          }
+        } catch {}
+      }
+      return false;
+    }
+  } catch (error) {
+    console.error('Error saving form booking data:', error);
+    return false;
+  }
+};
+
+/**
+ * Save booking data from AI AGENT to ai_bookings_success table
+ */
+export const saveAIBookingData = async (
+  userId: number,
+  sessionId: string,
+  bookingState: BookingState,
+  bookingData: Partial<Booking>
+): Promise<boolean> => {
+  try {
+    console.log('Saving AI AGENT booking data to ai_bookings_success table:', {
+      userId,
+      sessionId,
+      bookingState,
+      bookingData
+    });
+
+    // Convert booking data format to match backend API
+    const normalizedMeetingTime = bookingData.time
+      ? extractStartTime(bookingData.time)
+      : '09:00:00';
+
+    const backendBookingData = {
+      user_id: userId,
+      session_id: sessionId,
+      room_id: 0, // Will be set based on room name
+      room_name: bookingData.roomName || '',
+      topic: bookingData.topic || '',
+      pic: bookingData.pic || '-',
+      meeting_date: bookingData.date || new Date().toISOString().slice(0, 10),
+      meeting_time: normalizedMeetingTime,
+      duration: calculateDuration(bookingData.time),
+      participants: bookingData.participants || 0,
+      meeting_type: bookingData.meetingType || 'internal',
+      food_order: bookingData.foodOrder || 'tidak',
+      booking_state: 'BOOKED'
+    };
+
+    // If we have room name, try to get room ID
+    if (bookingData.roomName) {
       try {
-        const availability = await BackendService.checkRoomAvailability(
-          backendBookingData.room_id,
-          backendBookingData.meeting_date,
-          backendBookingData.meeting_time.substring(0,5),
-          backendBookingData.duration
+        const rooms = await BackendService.getAllRooms();
+        const room = rooms.data?.find((r: any) => 
+          r.name.toLowerCase().includes(bookingData.roomName?.toLowerCase() || '')
         );
-        if (availability?.data && availability.data.available === false) {
-          // Try to propose next 30-min slot within working hours
-          const start = backendBookingData.meeting_time.substring(0,5);
-          const [h, m] = start.split(':').map(Number);
-          const startMinutes = h * 60 + m;
-          const candidates: string[] = [];
-          for (let shift = 30; shift <= 180; shift += 30) {
-            const t = startMinutes + shift;
-            const hh = Math.floor(t / 60);
-            const mm = t % 60;
-            if (hh >= 9 && hh <= 17) candidates.push(`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`);
-          }
-          for (const cand of candidates) {
-            const avail2 = await BackendService.checkRoomAvailability(
-              backendBookingData.room_id,
-              backendBookingData.meeting_date,
-              cand,
-              backendBookingData.duration
-            );
-            if (avail2?.data?.available !== false) {
-              backendBookingData.meeting_time = `${cand}:00`;
-              break;
-            }
-          }
-          // Note: jika tidak ada kandidat yang tersedia, kita biarkan false dikembalikan di bawah
-          // agar UI bisa memutuskan apakah menampilkan "Ubah waktu" atau "Ubah ruangan".
+        if (room) {
+          backendBookingData.room_id = room.id;
         }
-      } catch (err) {
-        console.warn('Availability pre-check failed, continue to booking');
+      } catch (error) {
+        console.warn('Could not find room ID for:', bookingData.roomName);
       }
     }
 
-    // Create AI booking in MongoDB instead of MySQL
+    console.log('📊 AI Agent booking data prepared:', backendBookingData);
+
+    // Save directly to ai_bookings_success table (AI agent bookings)
     try {
-      const result = await ApiService.createAIBookingMongo(backendBookingData);
-      console.log('AI Booking data saved to MongoDB successfully:', result);
-      // Mirror ke MySQL (tanpa mengganti alur lama) agar backend juga punya catatan
-      try {
-        // Pastikan room_id valid sebelum mirroring
-        if (!backendBookingData.room_id || backendBookingData.room_id === 0) {
-          try {
-            const rooms = await BackendService.getAllRooms();
-            const room = rooms.data?.find((r: any) => 
-              (r.name || r.room_name || '').toLowerCase().includes((bookingData.roomName || '').toLowerCase())
-            );
-            if (room) {
-              backendBookingData.room_id = room.id;
-            }
-          } catch {}
-        }
-        if (backendBookingData.room_id && backendBookingData.room_id !== 0) {
-          await ApiService.createAIBooking({
-            user_id: backendBookingData.user_id,
-            session_id: backendBookingData.session_id,
-            room_id: backendBookingData.room_id,
-            topic: backendBookingData.topic,
-            meeting_date: backendBookingData.meeting_date,
-            meeting_time: backendBookingData.meeting_time,
-            duration: backendBookingData.duration,
-            participants: backendBookingData.participants,
-            meeting_type: backendBookingData.meeting_type,
-            food_order: backendBookingData.food_order,
-            booking_state: backendBookingData.booking_state
-          } as any);
-          console.log('AI Booking data mirrored to MySQL successfully');
-        } else {
-          console.warn('Skipping MySQL mirror because room_id is not resolved');
-        }
-      } catch (mirrorErr) {
-        console.warn('Failed to mirror AI booking to MySQL (non-blocking):', mirrorErr);
-      }
+      const result = await ApiService.saveSuccessfulAIBooking(backendBookingData);
+      console.log('✅ AI Agent booking data saved to ai_bookings_success table successfully:', result);
+      
       lastSuggestions = [];
       return true;
-    } catch (e) {
-      // Jika gagal karena konflik, coba cari ruangan alternatif lalu auto-book jika ada.
-      console.warn('Create booking failed, generating room suggestions');
-      lastSuggestions = [];
-      try {
-        const roomsResp = await BackendService.getAllRooms();
-        const rooms = roomsResp.data || [];
-        const desiredParticipants = backendBookingData.participants || 1;
-        const filtered = rooms
-          .filter((r: any) => r.id !== backendBookingData.room_id && (!r.capacity || r.capacity >= desiredParticipants))
-          .slice(0, 8);
-        for (const r of filtered) {
-          try {
-            const avail = await BackendService.checkRoomAvailability(
-              r.id,
-              backendBookingData.meeting_date,
-              backendBookingData.meeting_time.substring(0,5),
-              backendBookingData.duration
-            );
-            if (avail?.data?.available !== false) {
-              lastSuggestions.push({ id: r.id, name: r.name });
-              if (lastSuggestions.length >= 3) break;
-            }
-          } catch {}
-        }
-      } catch {}
-
-      if (lastSuggestions.length > 0) {
-        // Auto book dengan ruangan alternatif pertama
+    } catch (e: any) {
+      console.error('Error saving AI agent booking:', e);
+      
+      // Handle 409 Conflict (room not available)
+      if (e.message && e.message.includes('Room is not available')) {
+        console.log('🔄 Room not available for AI booking, trying alternative rooms');
+        
+        // Try to find alternative rooms for AI booking
+        lastSuggestions = [];
         try {
-          backendBookingData.room_id = lastSuggestions[0].id;
-          const result2 = await ApiService.createAIBookingMongo(backendBookingData);
-          console.log('AI Booking saved to MongoDB with alternative room:', result2);
-          return true;
-        } catch (err2) {
-          console.warn('Failed auto-booking with alternative room');
+          const roomsResp = await BackendService.getAllRooms();
+          const rooms = roomsResp.data || [];
+          const desiredParticipants = backendBookingData.participants || 1;
+          const filtered = rooms
+            .filter((r: any) => r.id !== backendBookingData.room_id && (!r.capacity || r.capacity >= desiredParticipants))
+            .slice(0, 8);
+          for (const r of filtered) {
+            try {
+              const avail = await BackendService.checkRoomAvailability(
+                r.id,
+                backendBookingData.meeting_date,
+                backendBookingData.meeting_time.substring(0,5),
+                backendBookingData.duration
+              );
+              if (avail?.data?.available !== false) {
+                lastSuggestions.push({ id: r.id, name: r.name });
+                if (lastSuggestions.length >= 3) break;
+              }
+            } catch {}
+          }
+        } catch {}
+
+        // Auto book with first alternative room for AI booking
+        if (lastSuggestions.length > 0) {
+          try {
+            // Create new booking data with alternative room to avoid duplicate
+            const alternativeBookingData = { ...backendBookingData };
+            alternativeBookingData.room_id = lastSuggestions[0].id;
+            alternativeBookingData.room_name = lastSuggestions[0].name;
+            
+            const result2 = await ApiService.saveSuccessfulAIBooking(alternativeBookingData);
+            console.log('✅ AI Booking saved to ai_bookings_success table with alternative room:', result2);
+            return true;
+          } catch (err2) {
+            console.warn('Failed auto-booking with alternative room for AI agent');
+          }
         }
       }
       return false;
     }
   } catch (error) {
-    console.error('Error saving booking data:', error);
+    console.error('Error saving AI agent booking data:', error);
     return false;
   }
+};
+
+/**
+ * Save booking data using new backend API (DEPRECATED - use saveFormBookingData or saveAIBookingData instead)
+ */
+export const saveBookingData = async (
+  userId: number,
+  sessionId: string,
+  bookingState: BookingState,
+  bookingData: Partial<Booking>
+): Promise<boolean> => {
+  console.warn('saveBookingData is deprecated. Use saveFormBookingData or saveAIBookingData instead.');
+  // Default to AI booking for backward compatibility
+  return saveAIBookingData(userId, sessionId, bookingState, bookingData);
 };
 
 /**

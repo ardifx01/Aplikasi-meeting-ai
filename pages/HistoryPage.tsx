@@ -3,6 +3,7 @@ import { Page, type Booking } from '../types';
 import { BackArrowIcon } from '../components/icons';
 import { ApiService } from '../src/config/api';
 import { getHistory } from '../services/historyService';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface Props {
   onNavigate: (page: Page) => void;
@@ -12,11 +13,19 @@ const HistoryPage: React.FC<Props> = ({ onNavigate }) => {
   const [serverBookings, setServerBookings] = useState<any[]>([]);
   const [mongoBookings, setMongoBookings] = useState<any[]>([]);
   const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0,10));
+  const { t } = useLanguage();
 
   useEffect(() => {
     const userDataStr = localStorage.getItem('user_data');
     const userData = userDataStr ? JSON.parse(userDataStr) : null;
-    const userId = userData?.id || 1;
+    const userId = userData?.id;
+    // Jika user tidak punya ID, tampilkan data kosong
+    if (!userId) {
+        console.log('User baru detected - showing empty history');
+        setServerBookings([]);
+        setMongoBookings([]);
+        return;
+    }
     ApiService.getUserBookings(userId).then(res=> setServerBookings(res.data||[])).catch(()=>setServerBookings([]));
     ApiService.getUserAIBookingsMongo(userId).then(res=> setMongoBookings(res.data||[])).catch(()=>setMongoBookings([]));
   }, []);
@@ -35,7 +44,7 @@ const HistoryPage: React.FC<Props> = ({ onNavigate }) => {
         <button onClick={() => onNavigate(Page.Dashboard)} className="mr-4 p-2 rounded-full hover:bg-gray-200">
           <BackArrowIcon />
         </button>
-        <h2 className="text-3xl font-bold text-gray-800">Histori Pemesanan</h2>
+        <h2 className="text-3xl font-bold text-gray-800">{t('dashboard.bookingHistory')}</h2>
       </div>
 
       <div className="mb-6 flex flex-col md:flex-row gap-4">

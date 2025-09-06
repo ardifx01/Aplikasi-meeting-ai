@@ -14,15 +14,39 @@ class Booking {
     }
 
     /**
+     * Ensure optional columns exist (runtime migration-safe)
+     */
+    private function ensurePicColumnExists() {
+        try {
+            // Check if 'pic' column exists in ai_booking_data
+            $stmt = $this->conn->prepare("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = 'pic'");
+            $stmt->bindValue(':table', $this->table_name);
+            $stmt->execute();
+            $exists = (int)$stmt->fetchColumn() > 0;
+            if (!$exists) {
+                // Add column PIC (nullable)
+                $alter = $this->conn->prepare("ALTER TABLE {$this->table_name} ADD COLUMN pic VARCHAR(255) NULL AFTER participants");
+                $alter->execute();
+            }
+        } catch (Throwable $e) {
+            // Silent failure to avoid breaking existing flows; logs for debugging
+            error_log('ensurePicColumnExists error: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Create a new AI booking
      */
     public function createAIBooking($data) {
         try {
+            // Ensure optional columns
+            $this->ensurePicColumnExists();
+
             $query = "INSERT INTO " . $this->table_name . "
                     (user_id, session_id, room_id, topic, meeting_date, meeting_time, 
-                     duration, participants, meeting_type, food_order, booking_state)
+                     duration, participants, pic, meeting_type, food_order, booking_state)
                     VALUES (:user_id, :session_id, :room_id, :topic, :meeting_date, :meeting_time,
-                            :duration, :participants, :meeting_type, :food_order, :booking_state)";
+                            :duration, :participants, :pic, :meeting_type, :food_order, :booking_state)";
 
             $stmt = $this->conn->prepare($query);
 
@@ -35,6 +59,7 @@ class Booking {
             $stmt->bindValue(":meeting_time", $data['meeting_time']);
             $stmt->bindValue(":duration", $data['duration']);
             $stmt->bindValue(":participants", $data['participants']);
+            $stmt->bindValue(":pic", isset($data['pic']) ? $data['pic'] : null);
             $stmt->bindValue(":meeting_type", $data['meeting_type']);
             $stmt->bindValue(":food_order", $data['food_order']);
             $stmt->bindValue(":booking_state", isset($data['booking_state']) ? $data['booking_state'] : 'BOOKED');
@@ -55,11 +80,14 @@ class Booking {
      */
     public function createBooking($data) {
         try {
+            // Ensure optional columns
+            $this->ensurePicColumnExists();
+
             $query = "INSERT INTO " . $this->table_name . "
                     (user_id, session_id, room_id, topic, meeting_date, meeting_time, 
-                     duration, participants, meeting_type, food_order, booking_state)
+                     duration, participants, pic, meeting_type, food_order, booking_state)
                     VALUES (:user_id, :session_id, :room_id, :topic, :meeting_date, :meeting_time,
-                            :duration, :participants, :meeting_type, :food_order, :booking_state)";
+                            :duration, :participants, :pic, :meeting_type, :food_order, :booking_state)";
 
             $stmt = $this->conn->prepare($query);
 
@@ -75,6 +103,7 @@ class Booking {
             $stmt->bindValue(":meeting_time", $data['meeting_time']);
             $stmt->bindValue(":duration", $data['duration']);
             $stmt->bindValue(":participants", $data['participants']);
+            $stmt->bindValue(":pic", isset($data['pic']) ? $data['pic'] : null);
             $stmt->bindValue(":meeting_type", $data['meeting_type']);
             $stmt->bindValue(":food_order", $data['food_order']);
             $stmt->bindValue(":booking_state", isset($data['booking_state']) ? $data['booking_state'] : 'BOOKED');
@@ -96,7 +125,7 @@ class Booking {
     public function getAllBookings() {
         try {
             $query = "SELECT b.*, u.full_name as user_name, u.email as user_email,
-                             r.room_name, r.capacity as room_capacity
+                             r.room_name, r.capacity as room_capacity, r.image_url
                       FROM " . $this->table_name . " b
                       LEFT JOIN users u ON b.user_id = u.id
                       LEFT JOIN meeting_rooms r ON b.room_id = r.id
@@ -118,7 +147,7 @@ class Booking {
     public function getBookingById($id) {
         try {
             $query = "SELECT b.*, u.full_name as user_name, u.email as user_email,
-                             r.room_name, r.capacity as room_capacity
+                             r.room_name, r.capacity as room_capacity, r.image_url
                       FROM " . $this->table_name . " b
                       LEFT JOIN users u ON b.user_id = u.id
                       LEFT JOIN meeting_rooms r ON b.room_id = r.id
@@ -140,7 +169,7 @@ class Booking {
      */
     public function getBookingsByUserId($userId) {
         try {
-            $query = "SELECT b.*, r.room_name, r.capacity as room_capacity
+            $query = "SELECT b.*, r.room_name, r.capacity as room_capacity, r.image_url
                       FROM " . $this->table_name . " b
                       LEFT JOIN meeting_rooms r ON b.room_id = r.id
                       WHERE b.user_id = :user_id
@@ -162,10 +191,13 @@ class Booking {
      */
     public function updateBooking($data) {
         try {
+            // Ensure optional columns
+            $this->ensurePicColumnExists();
+
             $query = "UPDATE " . $this->table_name . "
                     SET room_id = :room_id, topic = :topic, meeting_date = :meeting_date,
                         meeting_time = :meeting_time, duration = :duration, participants = :participants,
-                        meeting_type = :meeting_type, food_order = :food_order, 
+                        pic = :pic, meeting_type = :meeting_type, food_order = :food_order, 
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = :id";
 
@@ -179,6 +211,7 @@ class Booking {
             $stmt->bindParam(":meeting_time", $data['meeting_time']);
             $stmt->bindParam(":duration", $data['duration']);
             $stmt->bindParam(":participants", $data['participants']);
+            $stmt->bindParam(":pic", isset($data['pic']) ? $data['pic'] : null);
             $stmt->bindParam(":meeting_type", $data['meeting_type']);
             $stmt->bindParam(":food_order", $data['food_order']);
 
@@ -314,6 +347,41 @@ class Booking {
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             error_log("Error getting AI conversations: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get bookings for a specific room on a specific date
+     */
+    public function getRoomBookings($roomId, $date) {
+        try {
+            $query = "SELECT 
+                        abd.topic,
+                        abd.meeting_date,
+                        abd.meeting_time,
+                        abd.duration,
+                        abd.participants,
+                        abd.pic,
+                        abd.meeting_type,
+                        abd.food_order,
+                        u.full_name as user_name,
+                        ADDTIME(abd.meeting_time, SEC_TO_TIME(abd.duration * 60)) as end_time
+                      FROM ai_booking_data abd
+                      LEFT JOIN users u ON abd.user_id = u.id
+                      WHERE abd.room_id = :room_id 
+                      AND abd.meeting_date = :date
+                      AND abd.booking_state = 'BOOKED'
+                      ORDER BY abd.meeting_time ASC";
+            
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':room_id', $roomId);
+            $stmt->bindParam(':date', $date);
+            $stmt->execute();
+            
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Error getting room bookings: " . $e->getMessage());
             return [];
         }
     }
