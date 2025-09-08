@@ -48,6 +48,7 @@ export interface Booking {
   topic: string;
   date: string;
   time: string;
+  endTime?: string; // Waktu selesai (opsional)
   participants: number;
   pic: string;
   meetingType: 'internal' | 'external';
@@ -76,6 +77,8 @@ export enum BookingState {
   MODIFYING_TIME,
   MODIFYING_MEETING_TYPE,
   MODIFYING_FOOD_TYPE,
+  // One-shot booking form
+  ONE_SHOT_FORM,
 }
 
 export interface User {

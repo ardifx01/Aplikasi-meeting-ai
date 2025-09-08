@@ -3,15 +3,15 @@
  * Updated to use the correct backend endpoints
  */
 
-// Base API URL: use explicit backend host during npm dev; use same-origin in production
+// Base API URL: use environment variables for different environments
 export const API_BASE_URL = process.env.NODE_ENV === 'production'
-    ? `${(typeof window !== 'undefined' ? window.location.origin : '')}/backend/api`
-    : 'http://localhost:8080/backend/api';
+    ? (process.env.VITE_PROD_API_URL || `${(typeof window !== 'undefined' ? window.location.origin : '')}/backend/api`)
+    : (process.env.VITE_API_URL || 'http://localhost:8080/backend/api');
 
 // Separate base for Auth endpoints (lives under /api, not /backend/api)
 export const AUTH_API_BASE_URL = process.env.NODE_ENV === 'production'
-    ? `${(typeof window !== 'undefined' ? window.location.origin : '')}/api`
-    : 'http://localhost:8080/api';
+    ? (process.env.VITE_PROD_API_URL || `${(typeof window !== 'undefined' ? window.location.origin : '')}/api`)
+    : (process.env.VITE_API_URL || 'http://localhost:8080/api');
 
 // API Endpoints
 export const API_ENDPOINTS = {

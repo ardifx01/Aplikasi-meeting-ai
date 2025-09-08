@@ -8,7 +8,9 @@
     "dev:vite": "vite",
     "dev:php": "php -S 127.0.0.1:8080 -t .",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepare-deploy": "node scripts/prepare-deploy.js",
+    "build:prod": "NODE_ENV=production vite build"
   },
   "dependencies": {
     "concurrently": "^9.1.2",
