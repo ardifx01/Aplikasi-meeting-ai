@@ -41,10 +41,10 @@ const ReservationDetailPage: React.FC<Props> = ({ onNavigate, booking }) => {
   const displayTime = (booking.time || '').slice(0,5);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-emerald-50">
       <div className="container mx-auto px-4 py-8">
         {/* Header dengan gradient background */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 mb-8 shadow-xl">
+        <div className="bg-gradient-to-r from-teal-600 to-cyan-600 rounded-2xl p-6 mb-8 shadow-xl">
           <div className="flex items-center">
             <button 
               onClick={() => onNavigate(Page.Reservations)} 
@@ -54,7 +54,7 @@ const ReservationDetailPage: React.FC<Props> = ({ onNavigate, booking }) => {
             </button>
             <div>
               <h2 className="text-3xl font-bold text-white mb-1">Detail Reservasi</h2>
-              <p className="text-blue-100">Informasi lengkap reservasi meeting room</p>
+              <p className="text-teal-100">Informasi lengkap reservasi meeting room</p>
             </div>
           </div>
         </div>

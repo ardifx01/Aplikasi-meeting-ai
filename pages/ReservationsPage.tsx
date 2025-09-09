@@ -382,19 +382,10 @@ const ReservationsPage: React.FC<{ onNavigate: (page: Page) => void, bookings: B
         const seenBookings = new Set<string>(); // Untuk mendeteksi duplikasi berdasarkan kriteria booking
 
         // Gabungkan hasil dari server (MySQL), AI bookings, dan lokal
-        serverBookingsFormatted.forEach(b => { 
-            const key = String(b.id);
-            const bookingKey = `${b.roomName}-${b.topic}-${b.date}-${b.time}`; // Key berdasarkan kriteria booking
-            
-            if (!seenIds.has(key) && !seenBookings.has(bookingKey)) { 
-                unified.push(b); 
-                seenIds.add(key); 
-                seenBookings.add(bookingKey);
-            } 
-        });
+        // Prioritaskan AI bookings (yang lebih baru) untuk menghindari duplikasi
         aiBookingsFormatted.forEach(b => { 
             const key = String(b.id);
-            const bookingKey = `${b.roomName}-${b.topic}-${b.date}-${b.time}`; // Key berdasarkan kriteria booking
+            const bookingKey = `${b.roomName}-${b.topic}-${b.date}-${b.time}-${b.participants}`; // Key lebih spesifik
             
             if (!seenIds.has(key) && !seenBookings.has(bookingKey)) { 
                 unified.push(b); 
@@ -402,9 +393,21 @@ const ReservationsPage: React.FC<{ onNavigate: (page: Page) => void, bookings: B
                 seenBookings.add(bookingKey);
             } 
         });
+        
+        serverBookingsFormatted.forEach(b => { 
+            const key = String(b.id);
+            const bookingKey = `${b.roomName}-${b.topic}-${b.date}-${b.time}-${b.participants}`; // Key lebih spesifik
+            
+            if (!seenIds.has(key) && !seenBookings.has(bookingKey)) { 
+                unified.push(b); 
+                seenIds.add(key); 
+                seenBookings.add(bookingKey);
+            } 
+        });
+        
         bookings.forEach(b => { 
             const key = String(b.id);
-            const bookingKey = `${b.roomName}-${b.topic}-${b.date}-${b.time}`; // Key berdasarkan kriteria booking
+            const bookingKey = `${b.roomName}-${b.topic}-${b.date}-${b.time}-${b.participants}`; // Key lebih spesifik
             
             if (!seenIds.has(key) && !seenBookings.has(bookingKey)) { 
                 unified.push(b); 
@@ -422,18 +425,18 @@ const ReservationsPage: React.FC<{ onNavigate: (page: Page) => void, bookings: B
     }, [bookings, search, sort, serverBookings, aiBookings]);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-emerald-50">
             {/* Modern Header Section */}
             <div className="relative overflow-hidden">
-                {/* Background - Bright Blue Solid */}
-                <div className="absolute inset-0 bg-blue-500"></div>
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600"></div>
+                {/* Background - Teal Solid */}
+                <div className="absolute inset-0 bg-teal-500"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-teal-400 to-teal-600"></div>
                 
-                {/* Decorative Elements - Blue Variations */}
-                <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-blue-300/30 to-transparent rounded-full -translate-y-36 translate-x-36"></div>
-                <div className="absolute bottom-0 left-0 w-56 h-56 bg-gradient-to-tr from-blue-400/25 to-transparent rounded-full translate-y-28 -translate-x-28"></div>
-                <div className="absolute top-1/2 left-1/3 w-32 h-32 bg-gradient-to-r from-blue-200/20 to-blue-300/20 rounded-full blur-xl"></div>
-                <div className="absolute top-1/4 right-1/4 w-24 h-24 bg-gradient-to-r from-blue-300/15 to-blue-400/15 rounded-full blur-lg"></div>
+                {/* Decorative Elements - Teal Variations */}
+                <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-teal-300/30 to-transparent rounded-full -translate-y-36 translate-x-36"></div>
+                <div className="absolute bottom-0 left-0 w-56 h-56 bg-gradient-to-tr from-teal-400/25 to-transparent rounded-full translate-y-28 -translate-x-28"></div>
+                <div className="absolute top-1/2 left-1/3 w-32 h-32 bg-gradient-to-r from-teal-200/20 to-teal-300/20 rounded-full blur-xl"></div>
+                <div className="absolute top-1/4 right-1/4 w-24 h-24 bg-gradient-to-r from-teal-300/15 to-teal-400/15 rounded-full blur-lg"></div>
                 
                 {/* Subtle Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent"></div>

@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import { Page, type Booking, BookingState } from '../types';
 import { ApiService } from '../src/config/api';
-import { saveFormBookingData } from '../services/aiDatabaseService';
+import { saveFormBookingData, saveAIBookingData } from '../services/aiDatabaseService';
 
 interface BookingConfirmationPageProps {
     onNavigate: (page: Page) => void;
@@ -73,10 +73,10 @@ const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNav
                 }
 
                 // Generate session_id yang konsisten berdasarkan booking data
-                const currentSessionId = `form_${Date.now()}`;
+                const currentSessionId = `ai_${Date.now()}`;
                 
-                // Simpan data booking formulir ke ai_booking_data table
-                const ok = await saveFormBookingData(
+                // Simpan data booking AI ke ai_bookings_success table
+                const ok = await saveAIBookingData(
                     user_id,
                     currentSessionId,
                     BookingState.BOOKED,
@@ -93,12 +93,12 @@ const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNav
                 );
 
                 if (ok) {
-                    console.log('✅ Form booking data saved to ai_booking_data table successfully');
+                    console.log('✅ AI booking data saved to ai_bookings_success table successfully');
                     // Mark as saved to prevent duplicates
                     localStorage.setItem(saveKey, 'true');
-                    localStorage.setItem('last_booking_session_id', currentSessionId);
+                    localStorage.setItem('last_ai_booking_session_id', currentSessionId);
                 } else {
-                    console.warn('⚠️ Warning: failed to save form booking to backend');
+                    console.warn('⚠️ Warning: failed to save AI booking to backend');
                 }
 
                 console.log('Booking confirmed:', booking);
@@ -117,7 +117,7 @@ const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNav
                 <p className="text-gray-600 mt-4">Could not find the booking details. Please try again.</p>
                 <button 
                     onClick={() => onNavigate(Page.Dashboard)} 
-                    className="mt-6 bg-cyan-500 text-white font-bold py-3 px-6 rounded-xl hover:bg-cyan-600 transition shadow-lg"
+                    className="mt-6 bg-teal-500 text-white font-bold py-3 px-6 rounded-xl hover:bg-teal-600 transition shadow-lg"
                 >
                     Back to Dashboard
                 </button>
@@ -132,7 +132,7 @@ const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNav
             <p className="text-gray-600 mb-8">Ruang rapat Anda telah berhasil dikonfirmasi.</p>
             
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-left space-y-3">
-                <h3 className="text-xl font-bold text-cyan-600 mb-4 border-b pb-2">Rincian Reservasi</h3>
+                <h3 className="text-xl font-bold text-teal-600 mb-4 border-b pb-2">Rincian Reservasi</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
                     <div>
                         <p className="text-sm text-gray-500">Ruang Rapat</p>
@@ -183,7 +183,7 @@ const BookingConfirmationPage: React.FC<BookingConfirmationPageProps> = ({ onNav
             <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
                 <button 
                     onClick={() => onNavigate(Page.Dashboard)} 
-                    className="w-full sm:w-auto bg-cyan-500 text-white font-bold py-3 px-6 rounded-xl hover:bg-cyan-600 transition shadow-lg"
+                    className="w-full sm:w-auto bg-teal-500 text-white font-bold py-3 px-6 rounded-xl hover:bg-teal-600 transition shadow-lg"
                 >
                     Kembali ke Dashboard
                 </button>

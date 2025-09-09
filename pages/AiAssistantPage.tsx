@@ -16,8 +16,6 @@ import { saveAIBookingData, getLastSuggestions } from '../services/aiDatabaseSer
 
 import BackendService from '../src/services/backendService';
 
-
-
 const AiIcon: React.FC = () => {
     const [isThinking, setIsThinking] = useState(false);
 
@@ -114,6 +112,12 @@ const getQuickActionIcon = (label: string) => {
 
             return <HelpIcon className={iconClass} />;
 
+        case 'one-shot booking':
+
+        case 'one shot booking':
+
+            return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>;
+
         default:
 
             return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
@@ -177,6 +181,16 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ onNavigate, onBooking
                 icon: <BookingIcon />, 
 
                 action: () => handleQuickAction('start_booking', 'Pesan Ruangan') 
+
+            },
+
+            { 
+
+                label: 'One-Shot Booking', 
+
+                icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>, 
+
+                action: () => handleQuickAction('one_shot_booking', 'One-Shot Booking') 
 
             },
 
@@ -258,11 +272,16 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ onNavigate, onBooking
 
         
 
-        console.log(`📤 sendMessage called with:`, { text, bookingState, currentBooking });
+        console.log(`📤 sendMessage called with:`, { text, bookingState, currentBooking, isOneShotMode });
 
         console.log(`🔍 Current bookingState enum value:`, BookingState[bookingState]);
 
         
+
+        // Jika dalam mode one-shot interaktif, proses input untuk melengkapi data
+        if (isOneShotMode) {
+            return await handleOneShotInteractiveInput(text);
+        }
 
         // One-shot mode: coba proses perintah lengkap dalam satu kalimat
 
@@ -307,67 +326,8 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ onNavigate, onBooking
 
 
         if (result.finalBooking) {
-            // Simpan ke database untuk alur AI
-            try {
-                const userDataStr = localStorage.getItem('user_data');
-                const userData = userDataStr ? JSON.parse(userDataStr) : null;
-                const userId = userData?.id || 1;
-                const sessionId = 'ai_' + Date.now();
-                
-                console.log('🔄 Mencoba menyimpan booking AI ke database...');
-                console.log('📊 Data yang akan disimpan:', {
-                    userId,
-                    sessionId,
-                    bookingState: BookingState.BOOKED,
-                    bookingData: result.finalBooking
-                });
-
-                // Pastikan semua data terisi dengan benar sesuai input user
-                const bookingData = {
-                    roomName: result.finalBooking.roomName,
-                    topic: result.finalBooking.topic,
-                    date: result.finalBooking.date,
-                    time: result.finalBooking.time,
-                    participants: result.finalBooking.participants,
-                    meetingType: result.finalBooking.meetingType,
-                    foodOrder: result.finalBooking.foodOrder,
-                    pic: result.finalBooking.pic
-                };
-
-                console.log('📊 Data booking yang akan disimpan:', bookingData);
-                console.log('🔍 User input verification:');
-                console.log('  - Original user input:', text);
-                console.log('  - Final booking data:', result.finalBooking);
-
-                // Prevent duplicate saves with a flag
-                const aiSaveKey = `ai_booking_saved_${bookingData.roomName}_${bookingData.topic}_${bookingData.date}_${bookingData.time}`;
-                if (localStorage.getItem(aiSaveKey)) {
-                    console.log('ℹ️ AI Booking already saved, skipping duplicate save');
-                } else {
-                    const ok = await saveAIBookingData(
-                        userId,
-                        sessionId,
-                        BookingState.BOOKED,
-                        bookingData
-                    );
-
-                    if (ok) {
-                        console.log('✅ Booking AI berhasil disimpan ke database ai_bookings_success');
-                        // Mark as saved to prevent duplicates
-                        localStorage.setItem(aiSaveKey, 'true');
-                        localStorage.setItem('last_ai_booking_session_id', sessionId);
-                    } else {
-                        console.warn('⚠️ Peringatan: gagal menyimpan booking AI ke backend. Melanjutkan ke konfirmasi.');
-                    }
-                }
-
-            } catch (e) {
-                console.error('❌ Gagal menyimpan booking AI:', e);
-                console.error('❌ Error details:', e.message);
-                console.error('❌ Error stack:', e.stack);
-            }
-
-            // Pastikan data terisi dengan benar sebelum dikirim ke halaman konfirmasi
+            // Langsung ke konfirmasi tanpa menyimpan ke database di sini
+            // Penyimpanan akan dilakukan di halaman konfirmasi untuk menghindari duplikasi
             const confirmedBooking = {
                 ...result.finalBooking,
                 roomName: result.finalBooking.roomName,
@@ -713,6 +673,10 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ onNavigate, onBooking
 
 
 
+    // State untuk tracking one-shot booking data
+    const [oneShotData, setOneShotData] = useState<Partial<Booking>>({});
+    const [isOneShotMode, setIsOneShotMode] = useState(false);
+
     const handleOneShotIfPossible = async (text: string): Promise<boolean> => {
 
         const lower = text.toLowerCase();
@@ -731,67 +695,55 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ onNavigate, onBooking
             return false;
         }
 
+        // Deteksi data yang tersedia
         const hasTime = !!parseTimeRangeFromText(lower);
-
         const hasDate = !!parseDateFromText(lower);
-
         const hasPeople = !!parseParticipantsFromText(lower);
+        const hasTopic = !!extractTopic(lower);
+        const hasPic = !!extractPic(lower);
 
         // deteksi nama ruangan secara longgar
-
         let hasRoom = false;
-
+        let availableRooms: any[] = [];
         try {
-
             const roomsResp = await BackendService.getAllRooms();
-
-            const rooms: Array<any> = roomsResp.data || [];
-
+            availableRooms = roomsResp.data || [];
             const msgNorm = normalize(lower);
-
-            hasRoom = rooms.some((r:any)=> {
-
+            hasRoom = availableRooms.some((r:any)=> {
                 const nm = normalize(r.name || r.room_name || '');
-
                 return nm && (msgNorm.includes(nm) || nm.includes(msgNorm));
-
             }) || /ruang|room|meeting/.test(lower);
-
         } catch {}
 
-        // longgarkan trigger: cukup ada jam + (ruang atau peserta atau tanggal)
+        // Cek apakah ada minimal 2 data penting (waktu + salah satu dari: ruang, peserta, tanggal)
+        const hasMinimumData = hasTime && (hasRoom || hasPeople || hasDate);
 
-        const looksComplete = hasTime && (hasRoom || hasPeople || hasDate);
+        if (!hasMinimumData) return false;
 
-        if (!looksComplete) return false;
+        // Jika data lengkap, proses langsung
+        if (hasTime && hasDate && hasPeople && hasRoom) {
+            return await processCompleteOneShot(text, lower, availableRooms);
+        }
 
+        // Jika data belum lengkap, mulai proses interaktif
+        return await processIncompleteOneShot(text, lower, availableRooms, {
+            hasTime, hasDate, hasPeople, hasRoom, hasTopic, hasPic
+        });
+    };
 
-
+    // Fungsi untuk memproses one-shot booking yang data sudah lengkap
+    const processCompleteOneShot = async (text: string, lower: string, availableRooms: any[]): Promise<boolean> => {
         try {
-
-            // Ambil rooms dari backend untuk pemetaan nama & kapasitas
-
-            const roomsResp = await BackendService.getAllRooms();
-
-            const rooms: Array<any> = roomsResp.data || [];
-
-
-
             const date = parseDateFromText(lower) || new Date().toISOString().slice(0,10);
-
             const timeInfo = parseTimeRangeFromText(lower) || { start: '09:00', duration: 60 };
-
             const participants = parseParticipantsFromText(lower) || 1;
-
             const rawPic = extractPic(lower);
-
             const pic = rawPic ? toTitleCase(rawPic) : '-';
-
             const needsFood = lower.includes('konsum') || lower.includes('konsumsi') || lower.includes('catering');
-
             const foodOrder = needsFood ? 'ringan' : 'tidak';
+            const topic = extractTopic(lower) || 'Rapat';
 
-            // Deteksi meeting type dengan lebih akurat
+            // Deteksi meeting type
             let meetingType: 'internal' | 'external' = 'internal';
             if (lower.includes('client') || lower.includes('klien') || 
                 lower.includes('eksternal') || lower.includes('external') ||
@@ -800,173 +752,381 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ onNavigate, onBooking
                 meetingType = 'external';
             }
 
-            // Topik: jika tidak ada kata kunci "topik/tema", gunakan default singkat agar tidak mengisi seluruh prompt
-
-            const topic = extractTopic(lower) || 'Rapat';
-
-            // Log untuk debugging one-shot parsing
-            console.log('🔍 One-shot parsing details:');
-            console.log('  - Original text:', text);
-            console.log('  - Lower case:', lower);
-            console.log('  - Detected meeting type:', meetingType);
-            console.log('  - Detected time:', timeInfo.start);
-            console.log('  - Detected participants:', participants);
-            console.log('  - Detected PIC:', pic);
-            console.log('  - Detected food order:', foodOrder);
-            console.log('  - Detected topic:', topic);
-
-
-
-            // Cari ruangan diminta (pencocokan longgar)
-
+            // Cari ruangan yang diminta
             let requestedRoom: any | null = null;
-
-            for (const r of rooms) {
-
+            for (const r of availableRooms) {
                 const nm = normalize(r.name || r.room_name || '');
-
                 const msgNorm = normalize(lower);
-
-                if (nm && (msgNorm.includes(nm) || nm.includes(msgNorm))) { requestedRoom = r; break; }
-
+                if (nm && (msgNorm.includes(nm) || nm.includes(msgNorm))) { 
+                    requestedRoom = r; 
+                    break; 
+                }
             }
 
             // Jika tidak ada, pilih ruangan dengan kapasitas cukup
-
             if (!requestedRoom) {
-
-                const byCapacity = [...rooms].filter((r: any) => (r.capacity || 0) >= participants).sort((a:any,b:any)=> (a.capacity||999)-(b.capacity||999));
-
-                requestedRoom = byCapacity[0] || rooms.sort((a:any,b:any)=>(a.capacity||0)-(b.capacity||0)).pop();
-
+                const byCapacity = [...availableRooms]
+                    .filter((r: any) => (r.capacity || 0) >= participants)
+                    .sort((a:any,b:any)=> (a.capacity||999)-(b.capacity||999));
+                requestedRoom = byCapacity[0] || availableRooms.sort((a:any,b:any)=>(a.capacity||0)-(b.capacity||0)).pop();
             }
 
-
-
             // Cek ketersediaan
-
             const startTime = timeInfo.start.substring(0,5);
-
             const duration = timeInfo.duration || 60;
-
             const avail = await BackendService.checkRoomAvailability(requestedRoom.id, date, startTime, duration);
 
             let finalRoom = requestedRoom;
-
             if (avail?.data?.available === false) {
-
-                // Cari fallback ruangan berdasarkan kapasitas yang sama/lebih besar, pilih terkecil yang muat
-
-                const candidates = [...rooms]
-
+                const candidates = [...availableRooms]
                     .filter((r:any)=> r.id !== requestedRoom.id && (!r.capacity || r.capacity >= participants))
-
                     .sort((a:any,b:any)=> (a.capacity||999)-(b.capacity||999));
 
                 for (const r of candidates) {
-
                     try {
-
                         const c = await BackendService.checkRoomAvailability(r.id, date, startTime, duration);
-
-                        if (c?.data?.available !== false) { finalRoom = r; break; }
-
+                        if (c?.data?.available !== false) { 
+                            finalRoom = r; 
+                            break; 
+                        }
                     } catch {}
-
                 }
-
             }
 
-
-
-            // Simpan & konfirmasi otomatis
-
-            const userDataStr = localStorage.getItem('user_data');
-
-            const userData = userDataStr ? JSON.parse(userDataStr) : null;
-
-            const userId = userData?.id || 1;
-
-            const sessionId = 'ai_' + Date.now();
-
-
-
-            const ok = await saveAIBookingData(userId, sessionId, BookingState.BOOKED, {
-
-                roomName: finalRoom.name,
-
-                topic,
-
-                date,
-
-                time: timeInfo.start,
-
-                participants,
-
-                meetingType: meetingType as any,
-
-                foodOrder: foodOrder as any,
-
-                pic
-
-            });
-
-
-
+            // Langsung ke konfirmasi tanpa menyimpan ke database di sini
+            // Penyimpanan akan dilakukan di halaman konfirmasi untuk menghindari duplikasi
             const booking: Booking = {
-
                 id: Date.now(),
-
                 roomName: finalRoom.name,
-
                 roomId: finalRoom.id,
-
                 topic,
-
                 date,
-
                 time: timeInfo.start,
-
                 participants,
-
                 pic: pic || '-',
-
                 meetingType: meetingType as any,
-
                 foodOrder: foodOrder as any
-
             };
 
-
-
-            // Catatan: histori 'Selesai' TIDAK ditulis di sini. Status 'Selesai' hanya ditulis ketika user klik tombol Selesai di halaman Reservasi.
-
-
-
             const confirmationNote = (finalRoom.id !== requestedRoom.id)
-
                 ? `Ruangan yang Anda minta tidak tersedia. Kami alihkan ke **${finalRoom.name}** yang kapasitasnya sesuai.`
-
                 : `Ruangan **${finalRoom.name}** tersedia.`;
 
-
-
             addMessage('ai', `Memproses permintaan one-shot...\n\n${confirmationNote}\n\nPemesanan dikonfirmasi untuk ${date} pukul ${startTime}.`);
-
             onBookingConfirmed(booking);
-
             onNavigate(Page.BookingConfirmation);
 
             return true;
-
         } catch (e) {
-
-            console.warn('One-shot parsing failed, fallback to normal flow:', e);
-
+            console.warn('Complete one-shot parsing failed, fallback to normal flow:', e);
             return false;
+        }
+    };
 
+    // Fungsi untuk memproses one-shot booking yang data belum lengkap
+    const processIncompleteOneShot = async (text: string, lower: string, availableRooms: any[], detectedData: any): Promise<boolean> => {
+        // Masuk ke mode one-shot interaktif
+        setIsOneShotMode(true);
+        
+        // Simpan data yang sudah terdeteksi
+        const newOneShotData: Partial<Booking> = {};
+        
+        if (detectedData.hasTime) {
+            const timeInfo = parseTimeRangeFromText(lower);
+            if (timeInfo) {
+                newOneShotData.time = timeInfo.start;
+            }
+        }
+        
+        if (detectedData.hasDate) {
+            const date = parseDateFromText(lower);
+            if (date) {
+                newOneShotData.date = date;
+            }
+        }
+        
+        if (detectedData.hasPeople) {
+            const participants = parseParticipantsFromText(lower);
+            if (participants) {
+                newOneShotData.participants = participants;
+            }
+        }
+        
+        if (detectedData.hasTopic) {
+            const topic = extractTopic(lower);
+            if (topic) {
+                newOneShotData.topic = topic;
+            }
+        }
+        
+        if (detectedData.hasPic) {
+            const pic = extractPic(lower);
+            if (pic) {
+                newOneShotData.pic = toTitleCase(pic);
+            }
+        }
+        
+        if (detectedData.hasRoom) {
+            // Cari ruangan yang cocok
+            for (const r of availableRooms) {
+                const nm = normalize(r.name || r.room_name || '');
+                const msgNorm = normalize(lower);
+                if (nm && (msgNorm.includes(nm) || nm.includes(msgNorm))) { 
+                    newOneShotData.roomName = r.name;
+                    newOneShotData.roomId = r.id;
+                    break; 
+                }
+            }
         }
 
+        // Update data one-shot
+        setOneShotData(prev => ({ ...prev, ...newOneShotData }));
+
+        // Tentukan data apa yang masih kurang
+        const missingData = [];
+        if (!newOneShotData.time) missingData.push('waktu');
+        if (!newOneShotData.date) missingData.push('tanggal');
+        if (!newOneShotData.participants) missingData.push('jumlah peserta');
+        if (!newOneShotData.roomName) missingData.push('ruangan');
+        if (!newOneShotData.topic) missingData.push('topik rapat');
+        if (!newOneShotData.pic) missingData.push('PIC (atas nama siapa)');
+
+        // Buat pesan AI yang interaktif
+        let aiMessage = `Saya mendeteksi permintaan booking Anda! 🎯\n\n`;
+        
+        if (Object.keys(newOneShotData).length > 0) {
+            aiMessage += `**Data yang sudah saya catat:**\n`;
+            if (newOneShotData.time) aiMessage += `• Waktu: ${newOneShotData.time}\n`;
+            if (newOneShotData.date) aiMessage += `• Tanggal: ${newOneShotData.date}\n`;
+            if (newOneShotData.participants) aiMessage += `• Peserta: ${newOneShotData.participants} orang\n`;
+            if (newOneShotData.roomName) aiMessage += `• Ruangan: ${newOneShotData.roomName}\n`;
+            if (newOneShotData.topic) aiMessage += `• Topik: ${newOneShotData.topic}\n`;
+            if (newOneShotData.pic) aiMessage += `• PIC: ${newOneShotData.pic}\n`;
+            aiMessage += `\n`;
+        }
+
+        if (missingData.length > 0) {
+            aiMessage += `**Masih perlu melengkapi:** ${missingData.join(', ')}\n\n`;
+            aiMessage += `Silakan berikan informasi yang kurang, atau pilih dari opsi di bawah:`;
+        }
+
+        // Buat quick actions berdasarkan data yang kurang
+        const quickActions: QuickAction[] = [];
+        
+        if (!newOneShotData.time) {
+            quickActions.push({
+                label: 'Pilih Waktu',
+                icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
+                action: () => {
+                    addMessage('ai', 'Silakan ketik waktu yang Anda inginkan (contoh: 14:00, 09:00-11:00, atau jam 2 siang)');
+                }
+            });
+        }
+        
+        if (!newOneShotData.date) {
+            quickActions.push({
+                label: 'Pilih Tanggal',
+                icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>,
+                action: () => {
+                    addMessage('ai', 'Silakan ketik tanggal yang Anda inginkan (contoh: besok, lusa, 30 Januari, atau 15/02/2025)');
+                }
+            });
+        }
+        
+        if (!newOneShotData.participants) {
+            quickActions.push({
+                label: 'Jumlah Peserta',
+                icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 616 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>,
+                action: () => {
+                    addMessage('ai', 'Silakan ketik jumlah peserta (contoh: 5 orang, sepuluh peserta, atau 3)');
+                }
+            });
+        }
+        
+        if (!newOneShotData.roomName) {
+            // Tampilkan opsi ruangan yang tersedia
+            const roomOptions = availableRooms.slice(0, 3).map(room => ({
+                label: room.name,
+                icon: <BookingIcon className="w-4 h-4" />,
+                action: () => {
+                    setOneShotData(prev => ({ ...prev, roomName: room.name, roomId: room.id }));
+                    addMessage('user', room.name);
+                    checkOneShotCompletion();
+                }
+            }));
+            quickActions.push(...roomOptions);
+        }
+
+        addMessage('ai', aiMessage, quickActions);
+        return true;
+    };
+
+    // Fungsi untuk menangani input user dalam mode one-shot interaktif
+    const handleOneShotInteractiveInput = async (text: string): Promise<boolean> => {
+        const lower = text.toLowerCase();
+        let updated = false;
+        const newData: Partial<Booking> = {};
+
+        // Cek apakah user memberikan waktu
+        const timeInfo = parseTimeRangeFromText(lower);
+        if (timeInfo && !oneShotData.time) {
+            newData.time = timeInfo.start;
+            updated = true;
+        }
+
+        // Cek apakah user memberikan tanggal
+        const date = parseDateFromText(lower);
+        if (date && !oneShotData.date) {
+            newData.date = date;
+            updated = true;
+        }
+
+        // Cek apakah user memberikan jumlah peserta
+        const participants = parseParticipantsFromText(lower);
+        if (participants && !oneShotData.participants) {
+            newData.participants = participants;
+            updated = true;
+        }
+
+        // Cek apakah user memberikan topik
+        const topic = extractTopic(lower);
+        if (topic && !oneShotData.topic) {
+            newData.topic = topic;
+            updated = true;
+        }
+
+        // Cek apakah user memberikan PIC
+        const pic = extractPic(lower);
+        if (pic && !oneShotData.pic) {
+            newData.pic = toTitleCase(pic);
+            updated = true;
+        }
+
+        // Cek apakah user memberikan ruangan
+        if (!oneShotData.roomName) {
+            try {
+                const roomsResp = await BackendService.getAllRooms();
+                const rooms: Array<any> = roomsResp.data || [];
+                const msgNorm = normalize(lower);
+                
+                for (const r of rooms) {
+                    const nm = normalize(r.name || r.room_name || '');
+                    if (nm && (msgNorm.includes(nm) || nm.includes(msgNorm))) {
+                        newData.roomName = r.name;
+                        newData.roomId = r.id;
+                        updated = true;
+                        break;
+                    }
+                }
+            } catch {}
+        }
+
+        // Update data jika ada yang baru
+        if (updated) {
+            setOneShotData(prev => ({ ...prev, ...newData }));
+            addMessage('user', text);
+            
+            // Cek apakah data sudah lengkap
+            const updatedData = { ...oneShotData, ...newData };
+            if (updatedData.time && updatedData.date && updatedData.participants && updatedData.roomName) {
+                // Data sudah lengkap, proses booking
+                await processCompleteOneShotBooking(updatedData);
+            } else {
+                // Masih ada data yang kurang, tanyakan lagi
+                await askForMissingData(updatedData);
+            }
+        } else {
+            // Jika tidak ada data yang terdeteksi, tanyakan lagi
+            addMessage('user', text);
+            addMessage('ai', 'Maaf, saya tidak dapat memahami informasi yang Anda berikan. Silakan coba lagi atau gunakan format yang lebih jelas.\n\nContoh:\n• Waktu: "14:00" atau "jam 2 siang"\n• Tanggal: "besok" atau "30 Januari"\n• Peserta: "5 orang" atau "sepuluh"\n• Ruangan: nama ruangan yang tersedia');
+        }
+
+        setInput('');
+        return true;
+    };
+
+    // Fungsi untuk memproses booking one-shot yang sudah lengkap
+    const processCompleteOneShotBooking = async (data: Partial<Booking>) => {
+        setIsOneShotMode(false);
+        
+        // Langsung ke konfirmasi tanpa menyimpan ke database di sini
+        // Penyimpanan akan dilakukan di halaman konfirmasi untuk menghindari duplikasi
+        const booking: Booking = {
+            id: Date.now(),
+            roomName: data.roomName!,
+            roomId: data.roomId || 0,
+            topic: data.topic || 'Rapat',
+            date: data.date!,
+            time: data.time!,
+            participants: data.participants!,
+            pic: data.pic || '-',
+            meetingType: 'internal' as any,
+            foodOrder: 'tidak' as any
+        };
+
+        addMessage('ai', `✅ **Booking berhasil!**\n\nSemua data sudah lengkap. Pemesanan dikonfirmasi untuk ${data.date} pukul ${data.time}.`);
+        onBookingConfirmed(booking);
+        onNavigate(Page.BookingConfirmation);
+    };
+
+    // Fungsi untuk menanyakan data yang masih kurang
+    const askForMissingData = async (currentData: Partial<Booking>) => {
+        const missingData = [];
+        if (!currentData.time) missingData.push('waktu');
+        if (!currentData.date) missingData.push('tanggal');
+        if (!currentData.participants) missingData.push('jumlah peserta');
+        if (!currentData.roomName) missingData.push('ruangan');
+        if (!currentData.topic) missingData.push('topik rapat');
+        if (!currentData.pic) missingData.push('PIC (atas nama siapa)');
+
+        let aiMessage = `Terima kasih! Data sudah diperbarui. 🎯\n\n`;
+        
+        if (Object.keys(currentData).length > 0) {
+            aiMessage += `**Data yang sudah saya catat:**\n`;
+            if (currentData.time) aiMessage += `• Waktu: ${currentData.time}\n`;
+            if (currentData.date) aiMessage += `• Tanggal: ${currentData.date}\n`;
+            if (currentData.participants) aiMessage += `• Peserta: ${currentData.participants} orang\n`;
+            if (currentData.roomName) aiMessage += `• Ruangan: ${currentData.roomName}\n`;
+            if (currentData.topic) aiMessage += `• Topik: ${currentData.topic}\n`;
+            if (currentData.pic) aiMessage += `• PIC: ${currentData.pic}\n`;
+            aiMessage += `\n`;
+        }
+
+        if (missingData.length > 0) {
+            aiMessage += `**Masih perlu melengkapi:** ${missingData.join(', ')}\n\n`;
+            aiMessage += `Silakan berikan informasi yang kurang:`;
+        }
+
+        addMessage('ai', aiMessage);
+    };
+
+    // Fungsi untuk mengecek apakah one-shot booking sudah lengkap
+    const checkOneShotCompletion = async () => {
+        const { time, date, participants, roomName, topic, pic } = oneShotData;
+        
+        if (time && date && participants && roomName) {
+            // Data sudah lengkap, proses booking
+            setIsOneShotMode(false);
+            
+            // Langsung ke konfirmasi tanpa menyimpan ke database di sini
+            // Penyimpanan akan dilakukan di halaman konfirmasi untuk menghindari duplikasi
+            const booking: Booking = {
+                id: Date.now(),
+                roomName,
+                roomId: oneShotData.roomId || 0,
+                topic: topic || 'Rapat',
+                date,
+                time,
+                participants,
+                pic: pic || '-',
+                meetingType: 'internal' as any,
+                foodOrder: 'tidak' as any
+            };
+
+            addMessage('ai', `✅ **Booking berhasil!**\n\nSemua data sudah lengkap. Pemesanan dikonfirmasi untuk ${date} pukul ${time}.`);
+            onBookingConfirmed(booking);
+            onNavigate(Page.BookingConfirmation);
+        }
     };
 
 
@@ -980,6 +1140,10 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ onNavigate, onBooking
         if (actionValue === 'start_booking') {
 
             sendMessage('Pesan Ruangan');
+
+        } else if (actionValue === 'one_shot_booking') {
+            // One-shot booking - beri instruksi untuk mengetik perintah lengkap
+            addMessage('ai', 'Untuk One-Shot Booking, silakan ketik perintah lengkap Anda dalam satu kalimat.\n\nContoh:\n• "Pesan ruang A untuk rapat tim besok jam 14:00 dengan 5 orang"\n• "Booking ruang meeting hari ini jam 09:00-11:00 untuk presentasi client"\n• "Reservasi ruang 1 lusa jam 13:00 untuk brainstorming 8 peserta"');
 
         } else if (actionValue === 'Cek reservasi saya') {
 
@@ -1207,7 +1371,6 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ onNavigate, onBooking
 
     };
 
-    
 
     return (
 
@@ -1299,6 +1462,7 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ onNavigate, onBooking
                 </div>
             </div>
         </div>
+
     );
 };
 

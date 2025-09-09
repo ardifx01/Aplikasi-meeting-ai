@@ -181,7 +181,7 @@ const EditRoomPage: React.FC<EditRoomPageProps> = ({ onNavigate, room, onRoomUpd
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-emerald-50">
       {/* Header Section */}
       <div className="bg-white shadow-lg border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-6 py-6">
